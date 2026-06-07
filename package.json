@@ -1,5 +1,5 @@
 {
-  "name": "vanilla-query",
+  "name": "vanilla-signal-query",
   "version": "0.2.0",
   "private": false,
   "description": "An asynchronous data fetching and server state management library designed for vanilla JavaScript applications.",
@@ -7,6 +7,7 @@
     "fetch",
     "javascript",
     "query",
+    "signal",
     "vanilla"
   ],
   "homepage": "https://github.com/WangShai123/vanilla-query",
@@ -52,5 +53,5 @@
     "typescript": "^6.0.3",
     "vite-plus": "^0.1.23"
   },
-  "fullname": "vanilla-query"
+  "fullname": "vanilla-signal-query"
 }
