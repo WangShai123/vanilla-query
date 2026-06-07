@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vanilla Query 实战演示与测试</title>
+    <link rel="stylesheet" href="./test.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "vanilla-query": "../src/query.js",
+          "vanilla-signal": "../node_modules/vanilla-signal/dist/signal.mjs",
+          "vanilla-simple-lru": "../node_modules/vanilla-simple-lru/dist/lru.mjs"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Vanilla Query 实战演示与测试</h1>
+          <p>
+            使用模拟业务接口覆盖
+            createQuery、queryClient、缓存、失效、预取、重试、超时、取消、mutate 和订阅事件。
+          </p>
+        </div>
+        <div class="topbar-actions">
+          <button id="runAllButton" type="button">运行全部检查</button>
+          <button id="clearLogButton" class="secondary" type="button">清空日志</button>
+        </div>
+      </header>
+
+      <section class="metrics" aria-label="测试概览">
+        <div class="metric">
+          <strong id="metricPassed">0</strong>
+          <span>通过</span>
+        </div>
+        <div class="metric">
+          <strong id="metricFailed">0</strong>
+          <span>失败</span>
+        </div>
+        <div class="metric">
+          <strong id="metricEvents">0</strong>
+          <span>Client 事件</span>
+        </div>
+        <div class="metric">
+          <strong id="metricRequests">0</strong>
+          <span>模拟请求</span>
+        </div>
+      </section>
+
+      <main class="layout">
+        <aside class="sidebar">
+          <nav id="scenarioNav" class="scenario-nav" aria-label="场景导航"></nav>
+        </aside>
+
+        <section class="workspace">
+          <section class="panel primary-panel" id="productsPanel">
+            <div class="panel-head">
+              <div>
+                <h2>商品搜索与分页</h2>
+                <p>响应式 queryKey、keepPreviousData、refetch、reload、预取下一页。</p>
+              </div>
+              <span id="productsBadge" class="badge">pending</span>
+            </div>
+            <div class="panel-body">
+              <div class="toolbar">
+                <label>
+                  搜索
+                  <input id="productSearchInput" type="search" value="" />
+                </label>
+                <label>
+                  分类
+                  <select id="categorySelect">
+                    <option value="all">全部</option>
+                    <option value="hardware">硬件</option>
+                    <option value="software">软件</option>
+                    <option value="service">服务</option>
+                  </select>
+                </label>
+                <button id="previousPageButton" class="secondary" type="button">上一页</button>
+                <button id="nextPageButton" class="secondary" type="button">下一页</button>
+                <button id="refreshProductsButton" type="button">后台刷新</button>
+                <button id="reloadProductsButton" class="secondary" type="button">重新加载</button>
+                <button id="prefetchProductsButton" class="secondary" type="button">
+                  预取下一页
+                </button>
+              </div>
+              <div class="state-strip" id="productsStateStrip"></div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>商品</th>
+                      <th>分类</th>
+                      <th>库存</th>
+                      <th>价格</th>
+                      <th>状态</th>
+                    </tr>
+                  </thead>
+                  <tbody id="productsBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="grid-panels">
+            <section class="panel" id="productDetailPanel">
+              <div class="panel-head compact">
+                <div>
+                  <h2>详情与缓存命中</h2>
+                  <p>select、prefetchQuery、getQueryData、invalidate。</p>
+                </div>
+                <span id="detailBadge" class="badge">pending</span>
+              </div>
+              <div class="panel-body">
+                <div class="toolbar dense">
+                  <button id="selectProductButton" type="button">选择首个商品</button>
+                  <button id="prefetchDetailButton" class="secondary" type="button">
+                    预取详情
+                  </button>
+                  <button id="invalidateDetailButton" class="secondary" type="button">
+                    失效详情
+                  </button>
+                  <button id="removeDetailButton" class="secondary" type="button">
+                    删除详情缓存
+                  </button>
+                </div>
+                <div id="detailContent" class="detail-box"></div>
+                <pre id="manualCacheOutput" class="code-box"></pre>
+              </div>
+            </section>
+
+            <section class="panel" id="todosPanel">
+              <div class="panel-head compact">
+                <div>
+                  <h2>Todo 乐观更新</h2>
+                  <p>initialData、mutate、setQueryData、invalidateQueries。</p>
+                </div>
+                <span id="todosBadge" class="badge">pending</span>
+              </div>
+              <div class="panel-body">
+                <div class="toolbar dense">
+                  <button id="addTodoButton" type="button">乐观新增</button>
+                  <button id="toggleTodoButton" class="secondary" type="button">切换第一项</button>
+                  <button id="rollbackTodoButton" class="secondary" type="button">
+                    模拟失败回滚
+                  </button>
+                  <button id="syncTodosButton" class="secondary" type="button">服务端同步</button>
+                </div>
+                <ul id="todoList" class="todo-list"></ul>
+              </div>
+            </section>
+
+            <section class="panel" id="errorsPanel">
+              <div class="panel-head compact">
+                <div>
+                  <h2>错误、重试、超时、取消</h2>
+                  <p>BusinessError、retry、retryDelay、timeout、abort。</p>
+                </div>
+                <span id="errorBadge" class="badge">ready</span>
+              </div>
+              <div class="panel-body">
+                <div class="toolbar dense">
+                  <button id="runRetryButton" type="button">运行重试</button>
+                  <button id="runBusinessErrorButton" class="secondary" type="button">
+                    业务错误
+                  </button>
+                  <button id="runTimeoutButton" class="secondary" type="button">超时</button>
+                  <button id="runAbortButton" class="secondary" type="button">取消</button>
+                </div>
+                <div id="errorResult" class="result-list"></div>
+              </div>
+            </section>
+
+            <section class="panel" id="advancedPanel">
+              <div class="panel-head compact">
+                <div>
+                  <h2>高级读取与订阅</h2>
+                  <p>suspense、throwErrors、query.subscribe、client.subscribe。</p>
+                </div>
+                <span id="advancedBadge" class="badge">ready</span>
+              </div>
+              <div class="panel-body">
+                <div class="toolbar dense">
+                  <button id="runSuspenseButton" type="button">Suspense 读取</button>
+                  <button id="runThrowErrorsButton" class="secondary" type="button">
+                    throwErrors
+                  </button>
+                  <button id="runSubscribeButton" class="secondary" type="button">
+                    query.subscribe
+                  </button>
+                  <button id="clearClientButton" class="secondary" type="button">
+                    清空 client
+                  </button>
+                </div>
+                <div id="advancedResult" class="result-list"></div>
+              </div>
+            </section>
+          </section>
+        </section>
+
+        <aside class="right-rail">
+          <section class="panel">
+            <div class="panel-head compact">
+              <h2>自动检查</h2>
+              <button id="resetChecksButton" class="secondary" type="button">重置</button>
+            </div>
+            <div id="checkList" class="check-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head compact">
+              <h2>Client 事件日志</h2>
+            </div>
+            <pre id="eventLog" class="event-log"></pre>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="./test.js"></script>
+  </body>
+</html>
