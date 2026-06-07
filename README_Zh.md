@@ -2,16 +2,16 @@
 
 `vanilla-query` 是一个面向原生 JavaScript 的服务端状态和异步 query 运行时。它提供响应式请求状态、LRU 缓存、stale 刷新、请求去重、重试、超时、取消、预取和缓存失效。
 
-它设计为配合 `vanilla-signal` 使用：
+它设计为配合 [`vanilla-signal`](https://github.com/WangShai123/vanilla-signal) 使用：
 
 ```js
-import { createEffect } from 'vanilla-signal';
-import { createQuery } from 'vanilla-query';
+import { createEffect } from "vanilla-signal";
+import { createQuery } from "vanilla-query";
 
 const profile = createQuery({
-  queryKey: ['profile'],
+  queryKey: ["profile"],
   queryFn: async ({ signal }) => {
-    const response = await fetch('/api/profile', { signal });
+    const response = await fetch("/api/profile", { signal });
     return response.json();
   },
 });
@@ -35,7 +35,7 @@ createEffect(() => {
 
 ```js
 createQuery({
-  queryKey: ['products', { page: 1 }],
+  queryKey: ["products", { page: 1 }],
   queryFn: async ({ queryKey, signal, attempt, meta }) => {},
   enabled: true,
   initialData: undefined,
@@ -70,16 +70,16 @@ query.promise();
 ## Query Client
 
 ```js
-import { queryClient } from 'vanilla-query';
+import { queryClient } from "vanilla-query";
 
 await queryClient.prefetchQuery({
-  queryKey: ['product', 1],
+  queryKey: ["product", 1],
   staleTime: 60_000,
   queryFn: () => fetchProduct(1),
 });
 
-queryClient.invalidateQueries(['products']);
-queryClient.setQueryData(['product', 1], (product) => ({
+queryClient.invalidateQueries(["products"]);
+queryClient.setQueryData(["product", 1], (product) => ({
   ...product,
   liked: true,
 }));
