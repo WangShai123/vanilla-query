@@ -5,13 +5,13 @@
 It is designed to work with [`vanilla-signal`](https://github.com/WangShai123/vanilla-signal):
 
 ```js
-import { createEffect } from "vanilla-signal";
-import { createQuery } from "vanilla-query";
+import { createEffect } from 'vanilla-signal';
+import { createQuery } from 'vanilla-query';
 
 const profile = createQuery({
-  queryKey: ["profile"],
+  queryKey: ['profile'],
   queryFn: async ({ signal }) => {
-    const response = await fetch("/api/profile", { signal });
+    const response = await fetch('/api/profile', { signal });
     return response.json();
   },
 });
@@ -35,7 +35,7 @@ createEffect(() => {
 
 ```js
 createQuery({
-  queryKey: ["products", { page: 1 }],
+  queryKey: ['products', { page: 1 }],
   queryFn: async ({ queryKey, signal, attempt, meta }) => {},
   enabled: true,
   initialData: undefined,
@@ -70,16 +70,16 @@ query.promise();
 ## Query Client
 
 ```js
-import { queryClient } from "vanilla-query";
+import { queryClient } from 'vanilla-query';
 
 await queryClient.prefetchQuery({
-  queryKey: ["product", 1],
+  queryKey: ['product', 1],
   staleTime: 60_000,
   queryFn: () => fetchProduct(1),
 });
 
-queryClient.invalidateQueries(["products"]);
-queryClient.setQueryData(["product", 1], (product) => ({
+queryClient.invalidateQueries(['products']);
+queryClient.setQueryData(['product', 1], (product) => ({
   ...product,
   liked: true,
 }));
@@ -89,4 +89,3 @@ queryClient.setQueryData(["product", 1], (product) => ({
 
 - [API and usage](./docs/query.md)
 - [Design notes](./docs/design.md)
-- [Tutorial scripts](./tutorial/README.md)

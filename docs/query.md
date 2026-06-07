@@ -1,19 +1,19 @@
-# Vanilla Query 文档
+# Vanilla Query Documentation
 
-`vanilla-query` 是面向原生 JavaScript 业务请求场景的异步状态管理库。它提供响应式请求状态、LRU 缓存、请求去重、重试、超时、取消、预取和缓存失效能力。
+`vanilla-query` is an asynchronous state management library designed for native JavaScript business request scenarios. It provides reactive request states, LRU caching, request deduplication, retry mechanisms, timeout handling, cancellation, prefetching, and cache invalidation capabilities.
 
-## 设计目标
+## Design Goals
 
-- 独立数据层：只处理请求、缓存、状态和失效，不绑定 DOM 渲染。
-- 函数式 API：使用 `createQuery` 返回可调用的数据 accessor，读取数据直接调用 `query()`。
-- 业务请求友好：内置 `status`、`isLoading`、`isFetching`、`isStale`、`failureCount`、`refetch`、`retry`、`mutate` 等页面常用能力。
-- 跨实例缓存：相同 `queryKey` 共享 LRU 缓存和 pending 请求。
-- 可控一致性：支持 `staleTime`、`cacheTime`、`invalidateQueries`、`removeQueries` 和 `prefetchQuery`。
-- 请求安全：支持 AbortController、timeout、请求去重、重试和竞态保护。
+- Independent data layer: Only handles requests, caching, state, and invalidation without binding to DOM rendering.
+- Functional API: Uses `createQuery` to return a callable data accessor; read data by directly calling `query()`.
+- Business-request friendly: Built-in support for commonly used page capabilities like `status`, `isLoading`, `isFetching`, `isStale`, `failureCount`, `refetch`, `retry`, and `mutate`.
+- Cross-instance caching: Same `queryKey` shares LRU cache and pending requests.
+- Controlled consistency: Supports `staleTime`, `cacheTime`, `invalidateQueries`, `removeQueries`, and `prefetchQuery`.
+- Request safety: Supports AbortController, timeout, request deduplication, retry mechanisms, and race condition protection.
 
-## createQuery 形态
+## createQuery Form
 
-`createQuery` 返回一个可调用函数。函数本身用于读取当前数据，状态和控制方法挂在函数对象上：
+`createQuery` returns a callable function. The function itself is used to read current data, with state and control methods attached to the function object:
 
 ```js
 const user = createQuery({
@@ -24,22 +24,22 @@ const user = createQuery({
   },
 });
 
-user(); // 当前 data
+user(); // Current data
 user.state.status;
 user.refetch();
 ```
 
-这种形态把“读取数据”和“控制请求”放在同一个 query 对象上，适合列表、详情、搜索、仪表盘卡片等业务请求。
+This form places "reading data" and "controlling requests" on the same query object, suitable for business requests like lists, details, search, and dashboard cards.
 
-## 安装与引入
+## Installation and Import
 
 ```js
 import { createQuery, queryClient, createQueryClient } from 'vanilla-query';
 ```
 
-浏览器原生模块中可引入打包后的 `dist/query.mjs`。
+In browser native modules, you can import the bundled `dist/query.mjs`.
 
-## 基本用法
+## Basic Usage
 
 ```js
 const products = createQuery({
@@ -65,9 +65,9 @@ createEffect(() => {
 });
 ```
 
-`createQuery` 创建后默认自动执行。返回值是一个函数，调用它读取当前 `data`。
+After `createQuery` is created, it executes automatically by default. The return value is a function; call it to read the current `data`.
 
-## 状态字段
+## State Fields
 
 ```js
 query.state.data;
@@ -88,17 +88,17 @@ query.state.errorUpdatedAt;
 query.state.updatedAt;
 ```
 
-常用区别：
+Common distinctions:
 
-- `isLoading`：当前没有可展示数据，并且正在请求。
-- `isFetching`：正在请求，可能是首次加载，也可能是后台刷新。
-- `isStale`：当前数据可展示，但已经过期或正在用旧数据等待新结果。
-- `status`：描述数据结果状态。
-- `fetchStatus`：描述请求过程状态。
+- `isLoading`: Currently no displayable data and requesting.
+- `isFetching`: Currently requesting, which could be initial loading or background refresh.
+- `isStale`: Current data is displayable but has expired or is waiting for new results using old data.
+- `status`: Describes the data result state.
+- `fetchStatus`: Describes the request process state.
 
 ## queryKey
 
-`queryKey` 用于缓存、去重和失效。推荐使用数组：
+`queryKey` is used for caching, deduplication, and invalidation. Arrays are recommended:
 
 ```js
 createQuery({
@@ -107,14 +107,14 @@ createQuery({
 });
 ```
 
-对象 key 会稳定排序，所以以下两个 key 等价：
+Object keys are stably sorted, so the following two keys are equivalent:
 
 ```js
 ['products', { page: 1, keyword: 'phone' }];
 ['products', { keyword: 'phone', page: 1 }];
 ```
 
-`queryKey` 可以是响应式 accessor：
+`queryKey` can be a reactive accessor:
 
 ```js
 const [page, setPage] = createSignal(1);
@@ -126,7 +126,7 @@ const list = createQuery({
 });
 ```
 
-当 `page()` 变化时，query 会自动切换 key 并请求新数据。
+When `page()` changes, the query automatically switches keys and requests new data.
 
 ## queryFn
 
@@ -139,31 +139,31 @@ queryFn({
 });
 ```
 
-- `queryKey`：当前解析后的 key。
-- `attempt`：第几次尝试，从 1 开始。
-- `signal`：用于取消 fetch。
-- `meta`：`refetch({ meta })` 或 `prefetchQuery({ meta })` 传入的附加信息。
+- `queryKey`: The current parsed key.
+- `attempt`: Which attempt number, starting from 1.
+- `signal`: Used to cancel fetch.
+- `meta`: Additional information passed via `refetch({ meta })` or `prefetchQuery({ meta })`.
 
-## 常用方法
+## Common Methods
 
 ```js
-query.refetch(); // 强制后台刷新，默认保留旧数据
-query.reload(); // 强制重新加载，默认不保留旧数据
-query.retry(); // 强制再请求一次
-query.mutate(updater); // 本地更新并写入缓存
-query.invalidate(); // 标记当前 query cache stale
-query.remove(); // 删除当前缓存并重置状态
-query.abort(); // 中断当前请求并忽略旧结果
-query.destroy(); // 销毁响应式 effect 和请求
-query.promise(); // 当前 pending promise
-query.key(); // 当前 hash key
-query.queryKey(); // 当前原始 queryKey
+query.refetch(); // Force background refresh, keeps old data by default
+query.reload(); // Force reload, doesn't keep old data by default
+query.retry(); // Force another request
+query.mutate(updater); // Local update and write to cache
+query.invalidate(); // Mark current query cache as stale
+query.remove(); // Delete current cache and reset state
+query.abort(); // Abort current request and ignore old results
+query.destroy(); // Destroy reactive effects and requests
+query.promise(); // Current pending promise
+query.key(); // Current hash key
+query.queryKey(); // Current original queryKey
 query.subscribe((state) => {});
 ```
 
-## 缓存策略
+## Caching Strategy
 
-默认启用缓存：
+Caching is enabled by default:
 
 ```js
 createQuery({
@@ -175,12 +175,12 @@ createQuery({
 });
 ```
 
-- `staleTime`：数据保持 fresh 的时间。默认 `0`，表示成功后立即可被后台刷新。
-- `cacheTime`：缓存记录保留时间。默认 5 分钟。
-- `cacheMax`：LRU 最大缓存条数。默认 100。
-- `cache: false`：关闭缓存。
+- `staleTime`: Duration data remains fresh. Default is `0`, meaning immediately available for background refresh after success.
+- `cacheTime`: Cache record retention time. Default is 5 minutes.
+- `cacheMax`: Maximum LRU cache entries. Default is 100.
+- `cache: false`: Disable caching.
 
-示例：
+Example:
 
 ```js
 const user = createQuery({
@@ -191,11 +191,11 @@ const user = createQuery({
 });
 ```
 
-一分钟内再次创建相同 key 的 query 会直接使用缓存；十分钟后缓存被 LRU 过期。
+Creating a query with the same key within one minute will use the cache directly; after ten minutes, the cache expires via LRU.
 
 ## Query Client
 
-默认导出 `queryClient`，也可以创建独立 client：
+The default export is `queryClient`, or you can create an independent client:
 
 ```js
 const client = createQueryClient({
@@ -210,7 +210,7 @@ const query = createQuery({
 });
 ```
 
-### 预取
+### Prefetching
 
 ```js
 await queryClient.prefetchQuery({
@@ -220,7 +220,7 @@ await queryClient.prefetchQuery({
 });
 ```
 
-### 读取与写入缓存
+### Reading and Writing Cache
 
 ```js
 queryClient.getQueryData(['product', 1]);
@@ -231,7 +231,7 @@ queryClient.setQueryData(['product', 1], (previous) => ({
 }));
 ```
 
-### 失效和删除
+### Invalidation and Deletion
 
 ```js
 queryClient.invalidateQueries(['products']);
@@ -239,9 +239,9 @@ queryClient.removeQueries(['products', 1]);
 queryClient.clear();
 ```
 
-数组 filter 支持前缀匹配，`["products"]` 可以命中 `["products", 1]`、`["products", 2]`。
+Array filter supports prefix matching; `["products"]` can match `["products", 1]`, `["products", 2]`.
 
-### 监听 client 事件
+### Listening to Client Events
 
 ```js
 const unsubscribe = queryClient.subscribe((event) => {
@@ -249,9 +249,9 @@ const unsubscribe = queryClient.subscribe((event) => {
 });
 ```
 
-事件类型包括 `set`、`fetch`、`success`、`error`、`invalidate`、`remove`、`clear`。
+Event types include `set`, `fetch`, `success`, `error`, `invalidate`, `remove`, and `clear`.
 
-## 重试
+## Retry
 
 ```js
 createQuery({
@@ -262,7 +262,7 @@ createQuery({
 });
 ```
 
-默认不会重试 4xx 错误和 `AbortError`。可以自定义：
+By default, 4xx errors and `AbortError` are not retried. You can customize:
 
 ```js
 createQuery({
@@ -272,7 +272,7 @@ createQuery({
 });
 ```
 
-## Timeout 和 Abort
+## Timeout and Abort
 
 ```js
 const query = createQuery({
@@ -284,20 +284,20 @@ const query = createQuery({
 query.abort();
 ```
 
-请求超时会抛出 `TimeoutError`，并尝试 abort 当前请求。
+Request timeout throws a `TimeoutError` and attempts to abort the current request.
 
-## 业务响应归一化
+## Business Response Normalization
 
-默认支持 `{ success, data, message, code }` 风格：
+Default support for `{ success, data, message, code }` style responses:
 
 ```js
 { success: true, data: [...] }
 { success: false, message: "No access", code: "NO_ACCESS" }
 ```
 
-`success: false` 会转换成 `BusinessError`。
+`success: false` is converted to `BusinessError`.
 
-如果后端结构不同，可以传 `normalize`：
+If the backend structure differs, you can pass `normalize`:
 
 ```js
 createQuery({
@@ -313,7 +313,7 @@ createQuery({
 });
 ```
 
-关闭归一化：
+Disable normalization:
 
 ```js
 createQuery({
@@ -324,7 +324,7 @@ createQuery({
 
 ## select
 
-`select` 用于从响应数据里派生最终写入 state/cache 的数据：
+`select` is used to derive final data written to state/cache from response data:
 
 ```js
 createQuery({
@@ -336,7 +336,7 @@ createQuery({
 
 ## enabled
 
-`enabled` 可以是布尔值或 accessor：
+`enabled` can be a boolean value or an accessor:
 
 ```js
 const [id, setId] = createSignal(null);
@@ -348,9 +348,9 @@ const user = createQuery({
 });
 ```
 
-未启用时不会自动请求，`state.isPaused` 为 `true`。手动 `refetch()` 会强制请求。
+When disabled, automatic requests won't occur, and `state.isPaused` is `true`. Manual `refetch()` forces a request.
 
-## Suspense 与 throwErrors
+## Suspense and throwErrors
 
 ```js
 createQuery({
@@ -360,18 +360,18 @@ createQuery({
 });
 ```
 
-- `suspense: true`：读取 `query()` 时，如果首次请求还在 pending，会抛出当前 Promise。
-- `throwErrors: true`：读取 `query()` 时，如果有错误，会抛出当前 error。
+- `suspense: true`: When reading `query()`, if the initial request is still pending, it throws the current Promise.
+- `throwErrors: true`: When reading `query()`, if there's an error, it throws the current error.
 
-普通业务页面更推荐直接读 `query.state`。
+For regular business pages, directly reading `query.state` is more recommended.
 
-## 适用场景
+## Use Cases
 
-`createQuery` 适合管理需要和服务端同步的业务数据：
+`createQuery` is suitable for managing business data that needs synchronization with the server:
 
-- 列表、详情、搜索、分页、筛选。
-- 多个 UI 区域读取同一个接口数据。
-- 需要缓存、预取、去重、失效或乐观更新。
-- 需要统一处理 loading、refreshing、error、retry 状态。
+- Lists, details, search, pagination, filtering.
+- Multiple UI areas reading the same interface data.
+- Needs for caching, prefetching, deduplication, invalidation, or optimistic updates.
+- Unified handling of loading, refreshing, error, and retry states.
 
-`vanilla-query` 不负责 DOM 渲染。UI 层只消费 `query()` 和 `query.state`，渲染方式由应用自己决定。
+`vanilla-query` does not handle DOM rendering. The UI layer only consumes `query()` and `query.state`; the rendering approach is determined by the application itself.
