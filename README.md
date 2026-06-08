@@ -24,6 +24,29 @@ createEffect(() => {
 });
 ```
 
+## Install
+
+npm:
+
+```bash
+npm install vanilla-signal-query
+```
+
+script:
+
+```html
+<!-- umd GlobalName: query -->
+<script src="https://unpkg.com/vanilla-signal-query/dist/index.umd.js"></script>
+<script>
+  const { createQuery } = query;
+</script>
+
+<!-- es module -->
+<script type="module">
+  import { createQuery } from 'https://unpkg.com/vanilla-signal-query/dist/index.mjs';
+</script>
+```
+
 ## Core API
 
 - `createQuery(options)`: creates a reactive query accessor.

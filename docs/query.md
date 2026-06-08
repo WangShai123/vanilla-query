@@ -37,7 +37,7 @@ This form places "reading data" and "controlling requests" on the same query obj
 import { createQuery, queryClient, createQueryClient } from 'vanilla-query';
 ```
 
-In browser native modules, you can import the bundled `dist/query.mjs`.
+In browser native modules, you can import the bundled `dist/index.mjs`.
 
 ## Basic Usage
 

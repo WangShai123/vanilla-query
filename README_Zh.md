@@ -24,6 +24,29 @@ createEffect(() => {
 });
 ```
 
+## 安装
+
+npm:
+
+```bash
+npm install vanilla-signal-query
+```
+
+script:
+
+```html
+<!-- umd 全局变量：query -->
+<script src="https://unpkg.com/vanilla-signal-query/dist/index.umd.js"></script>
+<script>
+  const { createQuery } = query;
+</script>
+
+<!-- esm 模块导入 -->
+<script type="module">
+  import { createQuery } from 'https://unpkg.com/vanilla-signal-query/dist/index.mjs';
+</script>
+```
+
 ## 核心 API
 
 - `createQuery(options)`：创建响应式 query accessor。

@@ -37,7 +37,7 @@ user.refetch();
 import { createQuery, queryClient, createQueryClient } from 'vanilla-query';
 ```
 
-浏览器原生模块中可引入打包后的 `dist/query.mjs`。
+浏览器原生模块中可引入打包后的 `dist/index.mjs`。
 
 ## 基本用法
 

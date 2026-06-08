@@ -2,7 +2,7 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   pack: {
-    entry: 'src/query.js',
+    entry: 'src/index.js',
     outDir: 'dist',
     format: ['esm', 'umd'],
     globalName: 'query',
