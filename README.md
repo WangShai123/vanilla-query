@@ -6,7 +6,7 @@ It is designed to work with [`vanilla-signal`](https://github.com/WangShai123/va
 
 ```js
 import { createEffect } from 'vanilla-signal';
-import { createQuery } from 'vanilla-query';
+import { createQuery } from 'vanilla-signal-query';
 
 const profile = createQuery({
   queryKey: ['profile'],
@@ -23,6 +23,10 @@ createEffect(() => {
   console.log(profile());
 });
 ```
+
+## Npm Package Name Changed
+
+Due to npm package name conflict, the package name has been changed to `vanilla-signal-query`.
 
 ## Install
 
@@ -93,7 +97,7 @@ query.promise();
 ## Query Client
 
 ```js
-import { queryClient } from 'vanilla-query';
+import { queryClient } from 'vanilla-signal-query';
 
 await queryClient.prefetchQuery({
   queryKey: ['product', 1],

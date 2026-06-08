@@ -6,7 +6,7 @@
 
 ```js
 import { createEffect } from 'vanilla-signal';
-import { createQuery } from 'vanilla-query';
+import { createQuery } from 'vanilla-signal-query';
 
 const profile = createQuery({
   queryKey: ['profile'],
@@ -23,6 +23,10 @@ createEffect(() => {
   console.log(profile());
 });
 ```
+
+## Npm 包名变更
+
+因 npm 包名冲突，名称修改为 `vanilla-signal-query`。
 
 ## 安装
 
@@ -93,7 +97,7 @@ query.promise();
 ## Query Client
 
 ```js
-import { queryClient } from 'vanilla-query';
+import { queryClient } from 'vanilla-signal-query';
 
 await queryClient.prefetchQuery({
   queryKey: ['product', 1],

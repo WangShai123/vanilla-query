@@ -34,7 +34,11 @@ This form places "reading data" and "controlling requests" on the same query obj
 ## Installation and Import
 
 ```js
-import { createQuery, queryClient, createQueryClient } from 'vanilla-query';
+import {
+  createQuery,
+  queryClient,
+  createQueryClient,
+} from 'vanilla-signal-query';
 ```
 
 In browser native modules, you can import the bundled `dist/index.mjs`.

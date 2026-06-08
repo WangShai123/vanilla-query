@@ -72,7 +72,7 @@ stale 后还能用于快速展示旧内容，然后后台刷新。
 ## 4. 预取
 
 ```js
-import { queryClient } from 'vanilla-query';
+import { queryClient } from 'vanilla-signal-query';
 
 link.addEventListener('mouseenter', () => {
   queryClient.prefetchQuery({

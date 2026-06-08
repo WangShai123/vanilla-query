@@ -9,7 +9,7 @@
 ## 1. 最小示例
 
 ```js
-import { createQuery } from 'vanilla-query';
+import { createQuery } from 'vanilla-signal-query';
 
 const profile = createQuery({
   queryKey: ['profile'],

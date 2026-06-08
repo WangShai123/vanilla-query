@@ -58,7 +58,7 @@ async function toggleTodo(id) {
 ## 3. 保存成功后失效
 
 ```js
-import { queryClient } from 'vanilla-query';
+import { queryClient } from 'vanilla-signal-query';
 
 async function createTodo(input) {
   await fetch('/api/todos', {

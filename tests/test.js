@@ -1,11 +1,11 @@
+import { createEffect, createSignal, flushSync } from 'vanilla-signal';
 import {
   createQuery,
   createQueryClient,
   hashQueryKey,
   queryClient,
   stableHash,
-} from 'vanilla-query';
-import { createEffect, createSignal, flushSync } from 'vanilla-signal';
+} from 'vanilla-signal-query';
 
 const delay = (milliseconds, signal) =>
   new Promise((resolve, reject) => {

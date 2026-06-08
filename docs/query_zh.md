@@ -34,7 +34,11 @@ user.refetch();
 ## 安装与引入
 
 ```js
-import { createQuery, queryClient, createQueryClient } from 'vanilla-query';
+import {
+  createQuery,
+  queryClient,
+  createQueryClient,
+} from 'vanilla-signal-query';
 ```
 
 浏览器原生模块中可引入打包后的 `dist/index.mjs`。
