@@ -41,7 +41,7 @@ import {
 } from 'vanilla-signal-query';
 ```
 
-浏览器原生模块中可引入打包后的 `dist/index.mjs`。
+浏览器原生模块中可引入打包后的 `dist/index.js`。
 
 ## 基本用法
 

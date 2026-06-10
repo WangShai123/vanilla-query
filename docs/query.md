@@ -41,7 +41,7 @@ import {
 } from 'vanilla-signal-query';
 ```
 
-In browser native modules, you can import the bundled `dist/index.mjs`.
+In browser native modules, you can import the bundled `dist/index.js`.
 
 ## Basic Usage
 

@@ -47,7 +47,7 @@ script:
 
 <!-- esm 模块导入 -->
 <script type="module">
-  import { createQuery } from 'https://unpkg.com/vanilla-signal-query/dist/index.mjs';
+  import { createQuery } from 'https://unpkg.com/vanilla-signal-query/dist/index.js';
 </script>
 ```
 
