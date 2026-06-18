@@ -5,11 +5,17 @@ export default defineConfig({
     entry: 'src/index.js',
     outDir: 'dist',
     format: ['esm', 'umd'],
-    globalName: 'query',
+    globalName: 'vanillaSignalQuery',
     target: 'es2020',
     platform: 'browser',
     minify: true,
     clean: true,
+    outputOptions: {
+      globals: {
+        'vanilla-signal': 'vanillaSignal',
+        'vanilla-simple-lru': 'vanillaSimpleLru',
+      },
+    },
     outExtensions({ format }) {
       return {
         js: format === 'es' ? '.js' : '.js',

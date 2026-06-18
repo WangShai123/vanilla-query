@@ -39,10 +39,10 @@ npm install vanilla-signal-query
 script:
 
 ```html
-<!-- umd 全局变量：query -->
+<!-- umd 全局变量：vanillasignalQuery -->
 <script src="https://unpkg.com/vanilla-signal-query/dist/index.umd.js"></script>
 <script>
-  const { createQuery } = query;
+  const { createQuery } = vanillasignalQuery;
 </script>
 
 <!-- esm 模块导入 -->
