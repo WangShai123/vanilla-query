@@ -1,6 +1,6 @@
 {
   "name": "vanilla-signal-query",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": false,
   "description": "An asynchronous data fetching and server state management library designed for vanilla JavaScript applications.",
   "keywords": [
@@ -43,8 +43,8 @@
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
-    "vanilla-signal": "^0.2.7",
-    "vanilla-simple-lru": "^0.2.5"
+    "vanilla-signal": "1.1.0",
+    "vanilla-simple-lru": "1.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",
