@@ -39,10 +39,10 @@ npm install vanilla-signal-query
 script:
 
 ```html
-<!-- umd GlobalName: vanillasignalQuery -->
+<!-- umd GlobalName: vanillaSignalQuery -->
 <script src="https://unpkg.com/vanilla-signal-query/dist/index.umd.js"></script>
 <script>
-  const { createQuery } = vanillasignalQuery;
+  const { createQuery } = vanillaSignalQuery;
 </script>
 
 <!-- es module -->
