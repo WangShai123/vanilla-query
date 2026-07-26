@@ -7,9 +7,17 @@ import {
   hashQueryKey,
   stableHash,
 } from '../src/index.ts';
+import type { QueryCacheOptions, QueryClientEvent } from '../src/index.ts';
 
-const delay = (milliseconds) =>
-  new Promise((resolve) => {
+interface Todo {
+  id: number;
+  text: string;
+}
+
+type MemoryWebStorageOverrides = Partial<Storage>;
+
+const delay = (milliseconds: number) =>
+  new Promise<void>((resolve) => {
     setTimeout(resolve, milliseconds);
   });
 
@@ -30,7 +38,10 @@ describe('createQuery', () => {
     const query = createQuery({
       client,
       queryKey: ['profile'],
-      queryFn: async ({ queryKey }) => ({ id: queryKey[0] }),
+      queryFn: async ({ queryKey }) => {
+        const [id] = queryKey as [string];
+        return { id };
+      },
     });
 
     expect(query.state.isFetching).toBe(true);
@@ -158,8 +169,9 @@ describe('createQuery', () => {
       keepPreviousData: true,
       staleTime: 1000,
       queryFn: async ({ queryKey }) => {
+        const [, currentPage] = queryKey as [string, number];
         await delay(5);
-        return `page-${queryKey[1]}`;
+        return `page-${currentPage}`;
       },
     });
 
@@ -182,7 +194,7 @@ describe('createQuery', () => {
 
   it('mutates local state and cache', async () => {
     const client = createQueryClient();
-    const query = createQuery({
+    const query = createQuery<Todo[]>({
       client,
       queryKey: ['todos'],
       enabled: false,
@@ -191,7 +203,7 @@ describe('createQuery', () => {
       queryFn: async () => [],
     });
 
-    query.mutate((todos) => [...todos, { id: 1, text: 'write tests' }]);
+    query.mutate((todos) => [...(todos ?? []), { id: 1, text: 'write tests' }]);
 
     expect(query()).toEqual([{ id: 1, text: 'write tests' }]);
     expect(client.getQueryData(['todos'])).toEqual([
@@ -215,13 +227,13 @@ describe('createQuery', () => {
     });
 
     expect(client.invalidateQueries(['todos'])).toBe(2);
-    expect(client.getQueryEntry(['todos', 1]).isStale).toBe(true);
-    expect(client.getQueryEntry(['todos', 2]).isStale).toBe(true);
+    expect(client.getQueryEntry(['todos', 1])?.isStale).toBe(true);
+    expect(client.getQueryEntry(['todos', 2])?.isStale).toBe(true);
   });
 
   it('aborts the current request and ignores the old result', async () => {
     const client = createQueryClient();
-    let signal;
+    let signal: AbortSignal | undefined;
 
     const query = createQuery({
       client,
@@ -237,7 +249,7 @@ describe('createQuery', () => {
     await tick();
     query.abort();
 
-    expect(signal.aborted).toBe(true);
+    expect(signal?.aborted).toBe(true);
     expect(query.state.isFetching).toBe(false);
 
     await delay(30);
@@ -294,7 +306,7 @@ describe('createQuery', () => {
 
   it('persists fresh query data through localStorage adapter', async () => {
     const storage = createMemoryWebStorage();
-    const cache = {
+    const cache: QueryCacheOptions = {
       adapter: 'localStorage',
       options: {
         namespace: 'query-test',
@@ -324,7 +336,7 @@ describe('createQuery', () => {
 
   it('inherits cache adapter options from the query client', async () => {
     const storage = createMemoryWebStorage();
-    const cache = {
+    const cache: QueryCacheOptions = {
       adapter: 'localStorage',
       options: {
         namespace: 'query-client-inherit',
@@ -361,7 +373,7 @@ describe('createQuery', () => {
 
   it('lets query cache true use the default memory adapter', async () => {
     const storage = createMemoryWebStorage();
-    const cache = {
+    const cache: QueryCacheOptions = {
       adapter: 'localStorage',
       options: {
         namespace: 'query-cache-override',
@@ -392,7 +404,7 @@ describe('createQuery', () => {
 
   it('expires localStorage adapter records by cache options ttl', async () => {
     const storage = createMemoryWebStorage();
-    const cache = {
+    const cache: QueryCacheOptions = {
       adapter: 'localStorage',
       options: {
         namespace: 'query-ttl-test',
@@ -438,14 +450,16 @@ describe('createQuery', () => {
         throw error;
       },
     });
-    const cacheErrors = [];
-    const optionErrors = [];
+    const cacheErrors: QueryClientEvent[] = [];
+    const optionErrors: Array<
+      [unknown, { key?: string; operation?: string; [key: string]: unknown }]
+    > = [];
     const client = createQueryClient({
       cache: {
         adapter: 'localStorage',
         options: {
           namespace: 'query-error-test',
-          onError(currentError, context) {
+          onError(currentError: unknown, context: Record<string, unknown>) {
             optionErrors.push([currentError, context]);
           },
           storage,
@@ -466,15 +480,17 @@ describe('createQuery', () => {
 
     expect(data).toBe('ok');
     expect(cacheErrors).toHaveLength(1);
-    expect(cacheErrors[0].error.message).toBe(error.message);
+    expect((cacheErrors[0].error as Error).message).toBe(error.message);
     expect(optionErrors).toHaveLength(1);
     expect(optionErrors[0][0]).toBe(cacheErrors[0].error);
     expect(optionErrors[0][1].operation).toBe('set');
   });
 });
 
-function createMemoryWebStorage(overrides = {}) {
-  const store = new Map();
+function createMemoryWebStorage(
+  overrides: MemoryWebStorageOverrides = {}
+): Storage {
+  const store = new Map<string, string>();
 
   return {
     get length() {
@@ -483,16 +499,16 @@ function createMemoryWebStorage(overrides = {}) {
     clear() {
       store.clear();
     },
-    getItem(key) {
-      return store.has(key) ? store.get(key) : null;
+    getItem(key: string) {
+      return store.get(key) ?? null;
     },
-    key(index) {
+    key(index: number) {
       return Array.from(store.keys())[index] ?? null;
     },
-    removeItem(key) {
+    removeItem(key: string) {
       store.delete(key);
     },
-    setItem(key, value) {
+    setItem(key: string, value: string) {
       store.set(key, String(value));
     },
     ...overrides,
