@@ -1,14 +1,14 @@
 # Vanilla Query 文档
 
-`vanilla-query` 是面向原生 JavaScript 业务请求场景的异步状态管理库。它提供响应式请求状态、LRU 缓存、请求去重、重试、超时、取消、预取和缓存失效能力。
+`vanilla-query` 是面向原生 JavaScript 业务请求场景的异步状态管理库。它提供响应式请求状态、可插拔数据缓存、请求去重、重试、超时、取消、预取和缓存失效能力。
 
 ## 设计目标
 
 - 独立数据层：只处理请求、缓存、状态和失效，不绑定 DOM 渲染。
 - 函数式 API：使用 `createQuery` 返回可调用的数据 accessor，读取数据直接调用 `query()`。
 - 业务请求友好：内置 `status`、`isLoading`、`isFetching`、`isStale`、`failureCount`、`refetch`、`retry`、`mutate` 等页面常用能力。
-- 跨实例缓存：相同 `queryKey` 共享 LRU 缓存和 pending 请求。
-- 可控一致性：支持 `staleTime`、`cacheTime`、`invalidateQueries`、`removeQueries` 和 `prefetchQuery`。
+- 跨实例缓存：相同 `queryKey` 共享缓存记录和 pending 请求。
+- 可控一致性：支持 `staleTime`、缓存适配器 `ttl`、`invalidateQueries`、`removeQueries` 和 `prefetchQuery`。
 - 请求安全：支持 AbortController、timeout、请求去重、重试和竞态保护。
 
 ## createQuery 形态
@@ -173,16 +173,26 @@ query.subscribe((state) => {});
 createQuery({
   queryKey: ['user', 1],
   staleTime: 1000 * 30,
-  cacheTime: 1000 * 60 * 5,
-  cacheMax: 100,
+  cache: {
+    enabled: true,
+    adapter: 'memory',
+    options: {
+      ttl: 1000 * 60 * 5,
+      maxSize: 100,
+    },
+  },
   queryFn,
 });
 ```
 
 - `staleTime`：数据保持 fresh 的时间。默认 `0`，表示成功后立即可被后台刷新。
-- `cacheTime`：缓存记录保留时间。默认 5 分钟。
-- `cacheMax`：LRU 最大缓存条数。默认 100。
+- `cache: true`：使用默认 memory 适配器。
 - `cache: false`：关闭缓存。
+- `cache.enabled`：使用对象配置时启用或关闭缓存。
+- `cache.adapter`：可选 `memory`、`cookie`、`localStorage`、`indexedDB`。
+- `cache.options.ttl`：缓存记录保留时间。默认 5 分钟，所有适配器都支持。
+- `cache.options.maxSize`：memory 适配器的 LRU 最大缓存条数。默认 100。
+- `cache.options.namespace`：持久化适配器的存储命名空间。默认 `vanilla-query`。
 
 示例：
 
@@ -190,12 +200,27 @@ createQuery({
 const user = createQuery({
   queryKey: ['user', id],
   staleTime: 60_000,
-  cacheTime: 10 * 60_000,
+  cache: {
+    adapter: 'localStorage',
+    options: {
+      namespace: 'app-query',
+      ttl: 10 * 60_000,
+    },
+  },
   queryFn,
 });
 ```
 
-一分钟内再次创建相同 key 的 query 会直接使用缓存；十分钟后缓存被 LRU 过期。
+一分钟内再次创建相同 key 的 query 会直接使用缓存；十分钟后缓存记录从对应适配器中过期。
+
+适配器默认配置：
+
+| Adapter        | 存储位置                                     | 默认配置                                      |
+| -------------- | -------------------------------------------- | --------------------------------------------- |
+| `memory`       | `vanilla-simple-lru`                         | `{ ttl: 300000, maxSize: 100 }`               |
+| `cookie`       | `vanilla-create-storage` cookie driver       | `{ ttl: 300000, namespace: 'vanilla-query' }` |
+| `localStorage` | `vanilla-create-storage` localStorage driver | `{ ttl: 300000, namespace: 'vanilla-query' }` |
+| `indexedDB`    | `vanilla-create-storage` indexedDB driver    | `{ ttl: 300000, namespace: 'vanilla-query' }` |
 
 ## Query Client
 
@@ -203,8 +228,13 @@ const user = createQuery({
 
 ```js
 const client = createQueryClient({
-  cacheMax: 300,
-  cacheTime: 10 * 60_000,
+  cache: {
+    adapter: 'memory',
+    options: {
+      maxSize: 300,
+      ttl: 10 * 60_000,
+    },
+  },
 });
 
 const query = createQuery({

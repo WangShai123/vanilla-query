@@ -1,6 +1,6 @@
 # Vanilla Query
 
-`vanilla-query` 是一个面向原生 JavaScript 的服务端状态和异步 query 运行时。它提供响应式请求状态、LRU 缓存、stale 刷新、请求去重、重试、超时、取消、预取和缓存失效。
+`vanilla-query` 是一个面向原生 JavaScript 的服务端状态和异步 query 运行时。它提供响应式请求状态、可插拔数据缓存适配器、stale 刷新、请求去重、重试、超时、取消、预取和缓存失效。
 
 它设计为配合 [`vanilla-signal`](https://github.com/WangShai123/vanilla-signal) 使用：
 
@@ -68,13 +68,34 @@ createQuery({
   initialData: undefined,
   keepPreviousData: true,
   staleTime: 0,
-  cacheTime: 5 * 60 * 1000,
-  cacheMax: 100,
+  cache: {
+    enabled: true,
+    adapter: 'memory', // memory | cookie | localStorage | indexedDB
+    options: {
+      ttl: 5 * 60 * 1000,
+      maxSize: 100,
+    },
+  },
   retry: 0,
   retryDelay: (attempt) => Math.min(1000 * 2 ** (attempt - 1), 30000),
   timeout: 0,
   select: (data) => data,
   normalize: (response) => ({ data: response }),
+});
+```
+
+`cache: true` 使用默认 memory 适配器，`cache: false` 关闭缓存。
+如果要使用浏览器持久化缓存，可以切换适配器：
+
+```js
+const client = createQueryClient({
+  cache: {
+    adapter: 'localStorage',
+    options: {
+      namespace: 'my-app-query',
+      ttl: 10 * 60_000,
+    },
+  },
 });
 ```
 

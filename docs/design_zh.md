@@ -9,22 +9,28 @@
 - 数据层独立：query 不直接操作 DOM。
 - 状态可观察：每个 query 暴露响应式 `state`。
 - 缓存可共享：相同 `queryKey` 可以复用缓存和 pending 请求。
-- 刷新可控：通过 `staleTime`、`cacheTime`、`invalidateQueries` 控制数据新鲜度。
+- 刷新可控：通过 `staleTime`、缓存适配器 `ttl`、`invalidateQueries` 控制数据新鲜度。
 - 请求安全：通过 AbortController、timeout、retry 和 request id 处理取消、超时、重试与竞态。
 
 ## 架构
 
-当前项目由两层组成：
+当前项目由三层运行时组成：
 
 - `createQuery(options)`：单个业务请求实例，负责解析 `queryKey`、维护状态、触发请求和暴露控制方法。
-- `createQueryClient(options)`：缓存和请求协调器，负责 LRU 缓存、pending 去重、预取、失效、删除和事件通知。
+- `createQueryClient(options)`：请求协调器，负责 pending 去重、预取、失效、删除和事件通知。
+- 缓存适配器：负责把 query 记录保留在 memory、cookie、localStorage 或 indexedDB 中。
 
 默认提供一个共享 `queryClient`。如果需要隔离缓存，可以创建独立 client：
 
 ```js
 const client = createQueryClient({
-  cacheMax: 300,
-  cacheTime: 10 * 60_000,
+  cache: {
+    adapter: 'memory',
+    options: {
+      maxSize: 300,
+      ttl: 10 * 60_000,
+    },
+  },
 });
 ```
 
@@ -128,11 +134,18 @@ queryClient.invalidateQueries(['products']);
 isStale = invalidated || Date.now() - updatedAt >= staleTime;
 ```
 
-缓存保留由 LRU 管理：
+缓存保留由所选适配器管理：
 
-- `cacheMax` 控制最大记录数。
-- `cacheTime` 控制记录保留时间。
+- `cache.options.ttl` 控制记录保留时间，所有适配器都支持。
+- `cache.options.maxSize` 控制 memory LRU 适配器的最大记录数。
 - `staleTime` 控制数据新鲜时间。
+
+支持的适配器：
+
+- `memory`：默认适配器，底层使用 `vanilla-simple-lru`。
+- `cookie`：持久化适配器，底层使用 `vanilla-create-storage`。
+- `localStorage`：持久化适配器，底层使用 `vanilla-create-storage`。
+- `indexedDB`：持久化适配器，底层使用 `vanilla-create-storage`。
 
 fresh cache 命中时，query 直接使用缓存。stale cache 命中时，query 可以先展示旧数据，再发起后台刷新。
 

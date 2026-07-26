@@ -1,6 +1,6 @@
 # Vanilla Query
 
-`vanilla-query` is a small server-state and async query runtime for vanilla JavaScript. It provides reactive query state, LRU cache, stale refresh, request dedupe, retry, timeout, abort, prefetch and cache invalidation.
+`vanilla-query` is a small server-state and async query runtime for vanilla JavaScript. It provides reactive query state, pluggable data cache adapters, stale refresh, request dedupe, retry, timeout, abort, prefetch and cache invalidation.
 
 It is designed to work with [`vanilla-signal`](https://github.com/WangShai123/vanilla-signal):
 
@@ -68,13 +68,34 @@ createQuery({
   initialData: undefined,
   keepPreviousData: true,
   staleTime: 0,
-  cacheTime: 5 * 60 * 1000,
-  cacheMax: 100,
+  cache: {
+    enabled: true,
+    adapter: 'memory', // memory | cookie | localStorage | indexedDB
+    options: {
+      ttl: 5 * 60 * 1000,
+      maxSize: 100,
+    },
+  },
   retry: 0,
   retryDelay: (attempt) => Math.min(1000 * 2 ** (attempt - 1), 30000),
   timeout: 0,
   select: (data) => data,
   normalize: (response) => ({ data: response }),
+});
+```
+
+`cache: true` uses the default memory adapter. `cache: false` disables caching.
+For persistent browser cache, switch the adapter:
+
+```js
+const client = createQueryClient({
+  cache: {
+    adapter: 'localStorage',
+    options: {
+      namespace: 'my-app-query',
+      ttl: 10 * 60_000,
+    },
+  },
 });
 ```
 

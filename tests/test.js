@@ -124,8 +124,13 @@ const [page, setPage] = createSignal(1);
 const [selectedProductId, setSelectedProductId] = createSignal(1);
 
 const client = createQueryClient({
-  cacheMax: 80,
-  cacheTime: 1000 * 60 * 8,
+  cache: {
+    adapter: 'memory',
+    options: {
+      maxSize: 80,
+      ttl: 1000 * 60 * 8,
+    },
+  },
 });
 
 const checks = new Map();
@@ -305,7 +310,11 @@ const productsQuery = createQuery({
   ],
   keepPreviousData: true,
   staleTime: 5000,
-  cacheTime: 1000 * 60 * 5,
+  cache: {
+    options: {
+      ttl: 1000 * 60 * 5,
+    },
+  },
   queryFn: (context) => api.products(context),
 });
 

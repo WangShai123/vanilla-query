@@ -9,22 +9,28 @@ Core principles:
 - Data layer independence: queries do not directly manipulate the DOM.
 - Observable state: each query exposes a reactive `state`.
 - Shareable cache: identical `queryKey` can reuse cached data and pending requests.
-- Controlled refresh: control data freshness through `staleTime`, `cacheTime`, and `invalidateQueries`.
+- Controlled refresh: control data freshness through `staleTime`, cache adapter `ttl`, and `invalidateQueries`.
 - Request safety: handle cancellation, timeouts, retries, and race conditions via AbortController, timeout, retry mechanisms, and request IDs.
 
 ## Architecture
 
-The current project consists of two layers:
+The current project consists of three runtime layers:
 
 - `createQuery(options)`: A single business request instance responsible for parsing `queryKey`, maintaining state, triggering requests, and exposing control methods.
-- `createQueryClient(options)`: Cache and request coordinator responsible for LRU caching, pending request deduplication, prefetching, invalidation, deletion, and event notifications.
+- `createQueryClient(options)`: Request coordinator responsible for pending request deduplication, prefetching, invalidation, deletion, and event notifications.
+- Cache adapters: storage backends responsible for retaining query records in memory, cookie, localStorage, or indexedDB.
 
 A shared `queryClient` is provided by default. If you need isolated caching, you can create an independent client:
 
 ```js
 const client = createQueryClient({
-  cacheMax: 300,
-  cacheTime: 10 * 60_000,
+  cache: {
+    adapter: 'memory',
+    options: {
+      maxSize: 300,
+      ttl: 10 * 60_000,
+    },
+  },
 });
 ```
 
@@ -128,11 +134,18 @@ Cache freshness:
 isStale = invalidated || Date.now() - updatedAt >= staleTime;
 ```
 
-Cache retention is managed by LRU:
+Cache retention is managed by the selected adapter:
 
-- `cacheMax` controls the maximum number of records.
-- `cacheTime` controls record retention time.
+- `cache.options.ttl` controls record retention time for every adapter.
+- `cache.options.maxSize` controls maximum record count for the memory LRU adapter.
 - `staleTime` controls data freshness duration.
+
+Supported adapters:
+
+- `memory`: default adapter backed by `vanilla-simple-lru`.
+- `cookie`: persistent adapter backed by `vanilla-create-storage`.
+- `localStorage`: persistent adapter backed by `vanilla-create-storage`.
+- `indexedDB`: persistent adapter backed by `vanilla-create-storage`.
 
 When fresh cache hits, the query uses the cache directly. When stale cache hits, the query can display old data first, then initiate background refresh.
 

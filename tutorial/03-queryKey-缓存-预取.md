@@ -3,7 +3,7 @@
 ## 本集目标
 
 - 理解 `queryKey`。
-- 理解 `staleTime` 和 `cacheTime`。
+- 理解 `staleTime` 和 `cache.options.ttl`。
 - 使用 `queryClient.prefetchQuery`。
 - 使用 `invalidateQueries` 让缓存过期。
 
@@ -50,20 +50,24 @@ const product = createQuery({
 
 超过一分钟，旧数据还能先显示，但会触发后台刷新。
 
-## 3. cacheTime
+## 3. cache.options.ttl
 
 ```js
 createQuery({
   queryKey: ['product', 1],
   staleTime: 60_000,
-  cacheTime: 10 * 60_000,
+  cache: {
+    options: {
+      ttl: 10 * 60_000,
+    },
+  },
   queryFn: fetchProduct,
 });
 ```
 
 口播：
 
-`cacheTime` 不是新鲜时间，而是缓存保留时间。
+`cache.options.ttl` 不是新鲜时间，而是缓存保留时间。
 
 数据 stale 了不代表马上删除。
 

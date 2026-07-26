@@ -92,8 +92,13 @@ queryClient.removeQueries(['todo', id]);
 
 ```js
 const adminQueryClient = createQueryClient({
-  cacheMax: 500,
-  cacheTime: 10 * 60_000,
+  cache: {
+    adapter: 'memory',
+    options: {
+      maxSize: 500,
+      ttl: 10 * 60_000,
+    },
+  },
 });
 
 const users = createQuery({
@@ -142,7 +147,7 @@ export function createProductsQuery(params) {
 
 - `queryKey` 决定身份。
 - `staleTime` 决定新鲜度。
-- `cacheTime` 决定保留时间。
+- `cache.options.ttl` 决定保留时间。
 - `refetch` 刷新。
 - `mutate` 本地更新。
 - `invalidateQueries` 让相关数据过期。

@@ -1,14 +1,14 @@
 # Vanilla Query Documentation
 
-`vanilla-query` is an asynchronous state management library designed for native JavaScript business request scenarios. It provides reactive request states, LRU caching, request deduplication, retry mechanisms, timeout handling, cancellation, prefetching, and cache invalidation capabilities.
+`vanilla-query` is an asynchronous state management library designed for native JavaScript business request scenarios. It provides reactive request states, pluggable data caching, request deduplication, retry mechanisms, timeout handling, cancellation, prefetching, and cache invalidation capabilities.
 
 ## Design Goals
 
 - Independent data layer: Only handles requests, caching, state, and invalidation without binding to DOM rendering.
 - Functional API: Uses `createQuery` to return a callable data accessor; read data by directly calling `query()`.
 - Business-request friendly: Built-in support for commonly used page capabilities like `status`, `isLoading`, `isFetching`, `isStale`, `failureCount`, `refetch`, `retry`, and `mutate`.
-- Cross-instance caching: Same `queryKey` shares LRU cache and pending requests.
-- Controlled consistency: Supports `staleTime`, `cacheTime`, `invalidateQueries`, `removeQueries`, and `prefetchQuery`.
+- Cross-instance caching: Same `queryKey` shares cache records and pending requests.
+- Controlled consistency: Supports `staleTime`, cache adapter `ttl`, `invalidateQueries`, `removeQueries`, and `prefetchQuery`.
 - Request safety: Supports AbortController, timeout, request deduplication, retry mechanisms, and race condition protection.
 
 ## createQuery Form
@@ -173,16 +173,26 @@ Caching is enabled by default:
 createQuery({
   queryKey: ['user', 1],
   staleTime: 1000 * 30,
-  cacheTime: 1000 * 60 * 5,
-  cacheMax: 100,
+  cache: {
+    enabled: true,
+    adapter: 'memory',
+    options: {
+      ttl: 1000 * 60 * 5,
+      maxSize: 100,
+    },
+  },
   queryFn,
 });
 ```
 
 - `staleTime`: Duration data remains fresh. Default is `0`, meaning immediately available for background refresh after success.
-- `cacheTime`: Cache record retention time. Default is 5 minutes.
-- `cacheMax`: Maximum LRU cache entries. Default is 100.
+- `cache: true`: Use the default memory adapter.
 - `cache: false`: Disable caching.
+- `cache.enabled`: Enables or disables cache when using object config.
+- `cache.adapter`: One of `memory`, `cookie`, `localStorage`, or `indexedDB`.
+- `cache.options.ttl`: Cache record retention time. Default is 5 minutes and applies to every adapter.
+- `cache.options.maxSize`: Maximum LRU entries for the memory adapter. Default is 100.
+- `cache.options.namespace`: Storage namespace for persistent adapters. Default is `vanilla-query`.
 
 Example:
 
@@ -190,12 +200,27 @@ Example:
 const user = createQuery({
   queryKey: ['user', id],
   staleTime: 60_000,
-  cacheTime: 10 * 60_000,
+  cache: {
+    adapter: 'localStorage',
+    options: {
+      namespace: 'app-query',
+      ttl: 10 * 60_000,
+    },
+  },
   queryFn,
 });
 ```
 
-Creating a query with the same key within one minute will use the cache directly; after ten minutes, the cache expires via LRU.
+Creating a query with the same key within one minute will use the cache directly; after ten minutes, the cache record expires from the configured adapter.
+
+Adapter defaults:
+
+| Adapter        | Backing store                                | Default options                               |
+| -------------- | -------------------------------------------- | --------------------------------------------- |
+| `memory`       | `vanilla-simple-lru`                         | `{ ttl: 300000, maxSize: 100 }`               |
+| `cookie`       | `vanilla-create-storage` cookie driver       | `{ ttl: 300000, namespace: 'vanilla-query' }` |
+| `localStorage` | `vanilla-create-storage` localStorage driver | `{ ttl: 300000, namespace: 'vanilla-query' }` |
+| `indexedDB`    | `vanilla-create-storage` indexedDB driver    | `{ ttl: 300000, namespace: 'vanilla-query' }` |
 
 ## Query Client
 
@@ -203,8 +228,13 @@ The default export is `queryClient`, or you can create an independent client:
 
 ```js
 const client = createQueryClient({
-  cacheMax: 300,
-  cacheTime: 10 * 60_000,
+  cache: {
+    adapter: 'memory',
+    options: {
+      maxSize: 300,
+      ttl: 10 * 60_000,
+    },
+  },
 });
 
 const query = createQuery({
