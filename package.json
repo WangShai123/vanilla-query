@@ -1,6 +1,6 @@
 {
   "name": "vanilla-signal-query",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "private": false,
   "description": "An asynchronous data fetching and server state management library designed for vanilla JavaScript applications.",
   "keywords": [
@@ -51,8 +51,6 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.5",
-    "@typescript/native-preview": "7.0.0-dev.20260509.2",
-    "bumpp": "^11.1.0",
     "typescript": "^7.0.2",
     "vite-plus": "^0.2.7"
   }
