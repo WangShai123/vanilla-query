@@ -21,6 +21,7 @@ import type {
   FetchQueryOptions,
   FetchQueryResult,
   NormalizedQueryOptions,
+  QueryKey,
   QueryCacheAdapter,
   QueryCacheRecord,
   QueryClient,
@@ -35,7 +36,7 @@ export function createQueryClient(
 ): QueryClient {
   const clientOptions = normalizeClientOptions(options);
   const caches = new Map<string, QueryCacheAdapter>();
-  const pendingRequests = new Map<string, Promise<FetchQueryResult>>();
+  const pendingRequests = new Map<string, Promise<FetchQueryResult<unknown>>>();
   const listeners = new Set<(event: QueryClientEvent) => void>();
 
   return {
@@ -54,7 +55,9 @@ export function createQueryClient(
   };
 
   function getCache(
-    cacheOptions: QueryClientOptions | NormalizedQueryOptions = {}
+    cacheOptions:
+      | NormalizedQueryOptions<unknown, unknown, QueryKey, unknown>
+      | QueryClientOptions = {}
   ): QueryCacheAdapter {
     const config = normalizeCacheConfig(cacheOptions, clientOptions);
     const cacheId = getCacheIdentity(config);
@@ -70,8 +73,13 @@ export function createQueryClient(
     return cache;
   }
 
-  async function fetchQuery<TData = unknown>(
-    options: FetchQueryOptions<TData>
+  async function fetchQuery<
+    TData = unknown,
+    TQueryFnData = TData,
+    TQueryKey extends QueryKey = QueryKey,
+    TError = unknown,
+  >(
+    options: FetchQueryOptions<TData, TQueryFnData, TQueryKey, TError>
   ): Promise<FetchQueryResult<TData>> {
     const key = options.key ?? hashQueryKey(options.queryKey);
     const cacheConfig = normalizeCacheConfig(options, clientOptions);
@@ -92,7 +100,7 @@ export function createQueryClient(
       return pendingRequests.get(key) as Promise<FetchQueryResult<TData>>;
     }
 
-    const promise = runFetch<TData>(key, {
+    const promise = runFetch<TData, TQueryFnData, TQueryKey, TError>(key, {
       ...options,
       cache: cacheConfig,
     });
@@ -115,8 +123,13 @@ export function createQueryClient(
     return promise;
   }
 
-  async function prefetchQuery<TData = unknown>(
-    options: FetchQueryOptions<TData>
+  async function prefetchQuery<
+    TData = unknown,
+    TQueryFnData = TData,
+    TQueryKey extends QueryKey = QueryKey,
+    TError = unknown,
+  >(
+    options: FetchQueryOptions<TData, TQueryFnData, TQueryKey, TError>
   ): Promise<TData> {
     const result = await fetchQuery({
       ...options,
@@ -128,14 +141,18 @@ export function createQueryClient(
 
   function getQueryData<TData = unknown>(
     queryKey: unknown,
-    cacheOptions: QueryClientOptions | NormalizedQueryOptions<TData> = {}
+    cacheOptions:
+      | NormalizedQueryOptions<TData, unknown, QueryKey, unknown>
+      | QueryClientOptions = {}
   ) {
     return getQueryEntry<TData>(queryKey, cacheOptions)?.data;
   }
 
   function getQueryEntry<TData = unknown>(
     queryKey: unknown,
-    cacheOptions: QueryClientOptions | NormalizedQueryOptions<TData> = {}
+    cacheOptions:
+      | NormalizedQueryOptions<TData, unknown, QueryKey, unknown>
+      | QueryClientOptions = {}
   ) {
     if (!normalizeCacheConfig(cacheOptions, clientOptions).enabled) {
       return undefined;
@@ -148,7 +165,9 @@ export function createQueryClient(
 
   async function getQueryEntryAsync<TData = unknown>(
     queryKey: unknown,
-    cacheOptions: QueryClientOptions | NormalizedQueryOptions<TData> = {}
+    cacheOptions:
+      | NormalizedQueryOptions<TData, unknown, QueryKey, unknown>
+      | QueryClientOptions = {}
   ) {
     if (!normalizeCacheConfig(cacheOptions, clientOptions).enabled) {
       return undefined;
@@ -269,9 +288,14 @@ export function createQueryClient(
     listeners.forEach((listener) => listener(event));
   }
 
-  async function runFetch<TData = unknown>(
+  async function runFetch<
+    TData = unknown,
+    TQueryFnData = TData,
+    TQueryKey extends QueryKey = QueryKey,
+    TError = unknown,
+  >(
     key: string,
-    options: FetchQueryOptions<TData>
+    options: FetchQueryOptions<TData, TQueryFnData, TQueryKey, TError>
   ): Promise<FetchQueryResult<TData>> {
     let attempt = 0;
 
@@ -296,11 +320,14 @@ export function createQueryClient(
           options.timeout,
           controller
         );
-        const normalized = normalizeResult(raw, options.normalize);
+        const normalized = normalizeResult<TQueryFnData>(
+          raw,
+          options.normalize
+        );
         const selected =
           typeof options.select === 'function'
             ? options.select(normalized.data)
-            : normalized.data;
+            : (normalized.data as unknown as TData);
         const updatedAt = now();
 
         if (normalizeCacheConfig(options, clientOptions).enabled) {
@@ -324,12 +351,14 @@ export function createQueryClient(
           fromCache: false,
         };
       } catch (error) {
-        if (!canRetry(error, attempt, options)) {
+        if (!canRetry(error as TError, attempt, options)) {
           notify({ type: 'error', key, error });
           throw error;
         }
 
-        await sleep(resolveRetryDelay(options.retryDelay, attempt, error));
+        await sleep(
+          resolveRetryDelay(options.retryDelay, attempt, error as TError)
+        );
       }
     }
   }

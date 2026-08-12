@@ -1,6 +1,7 @@
 import { normalizeResponse, shouldRetry } from './response.ts';
 import { normalizePositiveInteger, normalizePositiveNumber } from './time.ts';
 import type {
+  CacheAdapterOptions,
   CacheAdapterAlias,
   CacheAdapterName,
   NormalizedCacheConfig,
@@ -8,12 +9,13 @@ import type {
   QueryCacheAdapter,
   QueryCacheOptions,
   QueryClientOptions,
+  QueryKey,
   QueryOptions,
 } from './types.ts';
 
 export const DEFAULT_CACHE_TIME = 1000 * 60 * 5;
 export const DEFAULT_STALE_TIME = 0;
-export const DEFAULT_STORAGE_NAMESPACE = 'vanilla-query';
+export const DEFAULT_STORAGE_NAMESPACE = 'signal';
 
 export const defaultOptions = {
   enabled: true,
@@ -37,9 +39,14 @@ export const defaultOptions = {
   onSettled: undefined,
 };
 
-export function normalizeOptions<TData = unknown>(
-  options: QueryOptions<TData> = {}
-): NormalizedQueryOptions<TData> {
+export function normalizeOptions<
+  TData = unknown,
+  TQueryFnData = TData,
+  TQueryKey extends QueryKey = QueryKey,
+  TError = unknown,
+>(
+  options: QueryOptions<TData, TQueryFnData, TQueryKey, TError> = {}
+): NormalizedQueryOptions<TData, TQueryFnData, TQueryKey, TError> {
   const cacheConfig = normalizeCacheConfig(options);
 
   return {
@@ -51,7 +58,7 @@ export function normalizeOptions<TData = unknown>(
       options.staleTime ??
       cacheConfig.options.staleTime ??
       defaultOptions.staleTime,
-  } as NormalizedQueryOptions<TData>;
+  } as NormalizedQueryOptions<TData, TQueryFnData, TQueryKey, TError>;
 }
 
 export function normalizeClientOptions(options: QueryClientOptions = {}) {
@@ -64,7 +71,10 @@ export function normalizeClientOptions(options: QueryClientOptions = {}) {
 }
 
 export function normalizeCacheConfig(
-  options: QueryClientOptions | QueryOptions | NormalizedQueryOptions = {},
+  options:
+    | NormalizedQueryOptions<unknown, unknown, QueryKey, unknown>
+    | QueryClientOptions
+    | QueryOptions<unknown, unknown, QueryKey, unknown> = {},
   fallback?: { cacheConfig?: NormalizedCacheConfig }
 ): NormalizedCacheConfig {
   if ('cacheConfig' in options && options.cacheConfig) {
@@ -144,20 +154,26 @@ function normalizeCacheAdapterOptions(
   adapter: CacheAdapterName | QueryCacheAdapter,
   cacheOptions: QueryCacheOptions | NormalizedCacheConfig | undefined,
   fallback?: { cacheConfig?: NormalizedCacheConfig }
-) {
+): CacheAdapterOptions & {
+  max?: number;
+  maxAge?: number;
+  maxSize?: number;
+  ttl?: number;
+} {
   const defaults = getDefaultCacheAdapterOptions(adapter);
   const options = {
     ...defaults,
     ...fallback?.cacheConfig?.options,
     ...cacheOptions?.options,
-  };
+  } as CacheAdapterOptions & Record<string, unknown>;
 
   return {
     ...options,
-    maxSize: options.maxSize ?? options.max ?? defaults.maxSize,
-    max: options.max ?? options.maxSize ?? defaults.max,
-    maxAge: options.maxAge ?? options.ttl ?? defaults.maxAge,
-    ttl: options.ttl ?? options.maxAge ?? defaults.ttl,
+    maxSize:
+      toOptionalNumber(options.maxSize ?? options.max) ?? defaults.maxSize,
+    max: toOptionalNumber(options.max ?? options.maxSize) ?? defaults.max,
+    maxAge: toOptionalNumber(options.maxAge ?? options.ttl) ?? defaults.maxAge,
+    ttl: toOptionalNumber(options.ttl ?? options.maxAge) ?? defaults.ttl,
   };
 }
 
@@ -193,4 +209,8 @@ function getDefaultCacheAdapterOptions(
   }
 
   return base;
+}
+
+function toOptionalNumber(value: unknown) {
+  return typeof value === 'number' ? value : undefined;
 }

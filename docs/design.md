@@ -1,8 +1,8 @@
-# Vanilla Query Design Documentation
+# Vanilla Signal Query Design Documentation
 
 ## Design Principles
 
-`vanilla-query` focuses on server-side state management. It only handles requests, caching, state, invalidation, and request lifecycle, without binding to DOM rendering or prescribing UI organization patterns.
+`vanilla-signal-query` focuses on browser-side server state management. It handles query state, caching, invalidation, and request lifecycle, without binding to DOM rendering or prescribing UI organization patterns.
 
 Core principles:
 
@@ -19,6 +19,8 @@ The current project consists of three runtime layers:
 - `createQuery(options)`: A single business request instance responsible for parsing `queryKey`, maintaining state, triggering requests, and exposing control methods.
 - `createQueryClient(options)`: Request coordinator responsible for pending request deduplication, prefetching, invalidation, deletion, and event notifications.
 - Cache adapters: storage backends responsible for retaining query records in memory, cookie, localStorage, or indexedDB.
+
+The actual HTTP or async data request lives in `queryFn`. `vanilla-signal-query` calls `queryFn` and manages the returned data; it does not provide base URL, headers, interceptors, or response transport features.
 
 A shared `queryClient` is provided by default. If you need isolated caching, you can create an independent client:
 
@@ -148,6 +150,8 @@ Supported adapters:
 - `indexedDB`: persistent adapter backed by `vanilla-create-storage`.
 
 When fresh cache hits, the query uses the cache directly. When stale cache hits, the query can display old data first, then initiate background refresh.
+
+Persistent adapters keep a memory shadow cache and hydrate records from the selected browser storage. Async query execution can wait for hydration; synchronous cache reads expose the current in-memory view.
 
 ## Request Model
 

@@ -4,6 +4,8 @@ import Lru from 'vanilla-simple-lru';
 import { DEFAULT_CACHE_TIME, DEFAULT_STORAGE_NAMESPACE } from './options.ts';
 import { normalizePositiveNumber, now } from './time.ts';
 import type {
+  CacheErrorContext,
+  CacheErrorHandler,
   CacheAdapterName,
   NormalizedCacheConfig,
   QueryCacheAdapter,
@@ -17,20 +19,10 @@ const SUPPORTED_STORAGE_ADAPTERS = new Set([
   'localStorage',
 ]);
 
-type CacheOperation = 'clear' | 'close' | 'delete' | 'get' | 'hydrate' | 'set';
 type StorageCacheAdapterName = Exclude<CacheAdapterName, 'memory'>;
 type StorageCacheConfig = NormalizedCacheConfig & {
   adapter: StorageCacheAdapterName;
 };
-
-interface CacheErrorContext {
-  adapter: CacheAdapterName;
-  key?: string;
-  namespace: string;
-  operation: CacheOperation;
-}
-
-type CacheErrorHandler = (error: unknown, context: CacheErrorContext) => void;
 
 export class MemoryQueryCacheAdapter implements QueryCacheAdapter {
   name: CacheAdapterName = 'memory';
@@ -84,7 +76,18 @@ export class StorageQueryCacheAdapter implements QueryCacheAdapter {
   name: CacheAdapterName;
   key: string;
   private shadow: MemoryQueryCacheAdapter;
-  private storage: any;
+  private storage: {
+    clear(): Promise<void> | void;
+    close?(): Promise<void> | void;
+    delete(key: string): Promise<void> | void;
+    entries(): Promise<Array<[string, unknown]>> | Array<[string, unknown]>;
+    get(key: string): unknown;
+    set(
+      key: string,
+      value: QueryCacheRecord,
+      options: QueryCacheSetOptions
+    ): Promise<void> | void;
+  };
   private ready: Promise<void>;
   private onError?: CacheErrorHandler;
   private ttl: number;
@@ -287,14 +290,16 @@ function createStorageOptions(config: StorageCacheConfig) {
     maxAge,
     maxSize,
     namespace = DEFAULT_STORAGE_NAMESPACE,
+    onError,
     onDriverError,
     ttl,
     ...implicitDriverOptions
-  } = config.options;
+  } = config.options as Record<string, unknown>;
 
   void max;
   void maxAge;
   void maxSize;
+  void onError;
   void ttl;
 
   return {
@@ -303,13 +308,22 @@ function createStorageOptions(config: StorageCacheConfig) {
     codec,
     codecs,
     driver: config.adapter,
-    driverOptions: driverOptions ?? implicitDriverOptions,
+    driverOptions: {
+      ...implicitDriverOptions,
+      ...toRecord(driverOptions),
+    },
     fallback,
     keySeparator,
     namespace,
     onDriverError,
     ttl: normalizePositiveNumber(config.ttl, DEFAULT_CACHE_TIME),
   };
+}
+
+function toRecord(value: unknown) {
+  return value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function normalizeStorageCacheConfig(

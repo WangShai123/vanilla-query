@@ -1,9 +1,11 @@
+import type { MaybeAccessor } from 'vanilla-signal';
+
 export type MaybePromise<T> = T | Promise<T>;
-export type Accessor<T> = T | (() => T);
 export type QueryKey = unknown;
 export type QueryFilter = unknown;
 export type QueryStatus = 'pending' | 'success' | 'error';
 export type QueryFetchStatus = 'idle' | 'fetching';
+export type MaybeQueryAccessor<T = unknown> = MaybeAccessor<T>;
 export type CacheAdapterName =
   | 'memory'
   | 'cookie'
@@ -18,10 +20,63 @@ export type CacheAdapterAlias =
   | 'indexDB'
   | 'indexed-db';
 
-export interface QueryState<TData = unknown> {
+export type CacheOperation =
+  | 'clear'
+  | 'close'
+  | 'delete'
+  | 'get'
+  | 'hydrate'
+  | 'set';
+
+export interface CacheErrorContext {
+  adapter: CacheAdapterName;
+  key?: string;
+  namespace: string;
+  operation: CacheOperation;
+}
+
+export type CacheErrorHandler = (
+  error: unknown,
+  context: CacheErrorContext
+) => void;
+
+export interface BaseCacheAdapterOptions {
+  namespace?: string;
+  onError?: CacheErrorHandler;
+  ttl?: number;
+  [option: string]: unknown;
+}
+
+export interface MemoryCacheOptions extends BaseCacheAdapterOptions {
+  max?: number;
+  maxAge?: number;
+  maxSize?: number;
+}
+
+export interface CookieCacheOptions extends BaseCacheAdapterOptions {
+  driverOptions?: Record<string, unknown>;
+}
+
+export interface LocalStorageCacheOptions extends BaseCacheAdapterOptions {
+  driverOptions?: Record<string, unknown>;
+  storage?: Storage;
+}
+
+export interface IndexedDBCacheOptions extends BaseCacheAdapterOptions {
+  driverOptions?: Record<string, unknown>;
+}
+
+export type CacheAdapterOptions =
+  | BaseCacheAdapterOptions
+  | CookieCacheOptions
+  | IndexedDBCacheOptions
+  | LocalStorageCacheOptions
+  | MemoryCacheOptions;
+
+export interface QueryState<TData = unknown, TError = unknown> {
   data: TData | undefined;
   latest: TData | undefined;
-  error: any;
+  error: TError | null;
   failureCount: number;
   isError: boolean;
   isFetching: boolean;
@@ -37,9 +92,12 @@ export interface QueryState<TData = unknown> {
   updatedAt: number;
 }
 
-export interface QueryCacheRecord<TData = unknown> {
+export interface QueryCacheRecord<
+  TData = unknown,
+  TQueryKey extends QueryKey = QueryKey,
+> {
   data: TData;
-  queryKey: QueryKey;
+  queryKey: TQueryKey;
   updatedAt: number;
   staleTime: number;
   invalidated: boolean;
@@ -71,13 +129,13 @@ export interface QueryCacheAdapter {
 export interface QueryCacheOptions {
   enabled?: boolean;
   adapter?: CacheAdapterAlias | QueryCacheAdapter;
-  options?: Record<string, any>;
+  options?: CacheAdapterOptions;
 }
 
 export interface NormalizedCacheConfig {
   enabled: boolean;
   adapter: CacheAdapterName | QueryCacheAdapter;
-  options: Record<string, any>;
+  options: CacheAdapterOptions;
   maxSize: number;
   ttl: number;
 }
@@ -86,57 +144,79 @@ export interface QueryClientOptions {
   cache?: boolean | QueryCacheOptions | NormalizedCacheConfig;
 }
 
-export interface QueryOptions<TData = unknown> extends QueryClientOptions {
+export type NormalizeFn<TQueryFnData = unknown> = (
+  response: unknown
+) => TQueryFnData | { data: TQueryFnData };
+
+export interface QueryOptions<
+  TData = unknown,
+  TQueryFnData = TData,
+  TQueryKey extends QueryKey = QueryKey,
+  TError = unknown,
+> extends QueryClientOptions {
   client?: QueryClient;
-  queryKey?: Accessor<QueryKey>;
-  queryFn?: QueryFn<TData>;
-  enabled?: Accessor<boolean>;
-  initialData?: Accessor<TData | undefined>;
+  queryKey?: MaybeQueryAccessor<TQueryKey>;
+  queryFn?: QueryFn<TQueryFnData, TQueryKey>;
+  enabled?: MaybeQueryAccessor<boolean>;
+  initialData?: MaybeQueryAccessor<TData | undefined>;
   keepPreviousData?: boolean;
   refetchOnMount?: boolean | 'always';
   staleTime?: number;
   dedupe?: boolean;
-  retry?: number | ((attempt: number, error: any) => boolean);
-  retryDelay?: number | ((attempt: number, error: any) => number);
+  retry?: number | ((attempt: number, error: TError) => boolean);
+  retryDelay?: number | ((attempt: number, error: TError) => number);
   timeout?: number;
   throwErrors?: boolean;
   suspense?: boolean;
-  select?: (data: any) => TData;
-  normalize?: false | ((response: unknown) => unknown);
-  shouldRetry?: (error: any, attempt: number) => boolean;
-  onSuccess?: (data: TData, context: QueryCallbackContext<TData>) => void;
-  onError?: (error: any, context: QueryCallbackContext<TData>) => void;
+  select?: (data: TQueryFnData) => TData;
+  normalize?: false | NormalizeFn<TQueryFnData>;
+  shouldRetry?: (error: TError, attempt: number) => boolean;
+  onSuccess?: (
+    data: TData,
+    context: QueryCallbackContext<TData, TQueryKey>
+  ) => void;
+  onError?: (
+    error: TError,
+    context: QueryCallbackContext<TData, TQueryKey>
+  ) => void;
   onSettled?: (
     data: TData | undefined,
-    error: any,
-    context: QueryCallbackContext<TData>
+    error: TError | null,
+    context: QueryCallbackContext<TData, TQueryKey>
   ) => void;
   cacheConfig?: NormalizedCacheConfig;
 }
 
 export interface NormalizedQueryOptions<
   TData = unknown,
-> extends QueryOptions<TData> {
-  enabled: Accessor<boolean>;
-  initialData: Accessor<TData | undefined>;
+  TQueryFnData = TData,
+  TQueryKey extends QueryKey = QueryKey,
+  TError = unknown,
+> extends QueryOptions<TData, TQueryFnData, TQueryKey, TError> {
+  enabled: MaybeQueryAccessor<boolean>;
+  initialData: MaybeQueryAccessor<TData | undefined>;
   keepPreviousData: boolean;
   refetchOnMount: boolean | 'always';
   staleTime: number;
   cache: boolean | QueryCacheOptions | NormalizedCacheConfig;
   cacheConfig: NormalizedCacheConfig;
   dedupe: boolean;
-  retry: number | ((attempt: number, error: any) => boolean);
-  retryDelay: number | ((attempt: number, error: any) => number);
+  retry: number | ((attempt: number, error: TError) => boolean);
+  retryDelay: number | ((attempt: number, error: TError) => number);
   timeout: number;
   throwErrors: boolean;
   suspense: boolean;
-  normalize: false | ((response: unknown) => unknown);
-  shouldRetry: (error: any, attempt: number) => boolean;
+  normalize: false | NormalizeFn<TQueryFnData>;
+  shouldRetry: (error: TError, attempt: number) => boolean;
 }
 
-export interface QueryCallbackContext<TData = unknown> {
-  query: Query<TData>;
-  queryKey: QueryKey;
+export interface QueryCallbackContext<
+  TData = unknown,
+  TQueryKey extends QueryKey = QueryKey,
+  TError = unknown,
+> {
+  query: Query<TData, TQueryKey, TError>;
+  queryKey: TQueryKey;
   key: string;
   fromCache?: boolean;
   meta?: unknown;
@@ -158,10 +238,13 @@ export interface MutateOptions {
 
 export interface FetchQueryOptions<
   TData = unknown,
-> extends QueryOptions<TData> {
+  TQueryFnData = TData,
+  TQueryKey extends QueryKey = QueryKey,
+  TError = unknown,
+> extends QueryOptions<TData, TQueryFnData, TQueryKey, TError> {
   key?: string;
-  queryKey: QueryKey;
-  queryFn: QueryFn<TData>;
+  queryKey: TQueryKey;
+  queryFn: QueryFn<TQueryFnData, TQueryKey>;
   force?: boolean;
   getSignal?: (controller: AbortController | undefined) => void;
   meta?: unknown;
@@ -173,11 +256,15 @@ export interface FetchQueryResult<TData = unknown> {
   fromCache: boolean;
 }
 
-export interface Query<TData = unknown> {
+export interface Query<
+  TData = unknown,
+  TQueryKey extends QueryKey = QueryKey,
+  TError = unknown,
+> {
   (): TData | undefined;
-  state: QueryState<TData>;
+  state: QueryState<TData, TError>;
   key(): string;
-  queryKey(): QueryKey;
+  queryKey(): TQueryKey;
   promise(): Promise<TData | undefined> | null;
   refetch(options?: ExecuteOptions): Promise<TData | undefined>;
   reload(options?: ExecuteOptions): Promise<TData | undefined>;
@@ -191,16 +278,26 @@ export interface Query<TData = unknown> {
   abort(): void;
   destroy(): void;
   subscribe(
-    callback: (state: QueryState<TData>, snapshot: unknown[]) => void
+    callback: (state: QueryState<TData, TError>, snapshot: unknown[]) => void
   ): () => void;
 }
 
 export interface QueryClient {
-  fetchQuery<TData = unknown>(
-    options: FetchQueryOptions<TData>
+  fetchQuery<
+    TData = unknown,
+    TQueryFnData = TData,
+    TQueryKey extends QueryKey = QueryKey,
+    TError = unknown,
+  >(
+    options: FetchQueryOptions<TData, TQueryFnData, TQueryKey, TError>
   ): Promise<FetchQueryResult<TData>>;
-  prefetchQuery<TData = unknown>(
-    options: FetchQueryOptions<TData>
+  prefetchQuery<
+    TData = unknown,
+    TQueryFnData = TData,
+    TQueryKey extends QueryKey = QueryKey,
+    TError = unknown,
+  >(
+    options: FetchQueryOptions<TData, TQueryFnData, TQueryKey, TError>
   ): Promise<TData>;
   getQueryData<TData = unknown>(
     queryKey: QueryKey,
@@ -230,25 +327,22 @@ export interface QueryClient {
   hashQueryKey(queryKey: QueryKey): string;
 }
 
-export interface QueryClientEvent {
-  type:
-    | 'cache-error'
-    | 'clear'
-    | 'error'
-    | 'fetch'
-    | 'invalidate'
-    | 'remove'
-    | 'set'
-    | 'success';
-  key?: string;
-  data?: unknown;
-  error?: unknown;
-  state?: QueryState;
-}
+export type QueryClientEvent =
+  | { type: 'cache-error'; error: unknown; key?: string }
+  | { type: 'clear' }
+  | { type: 'error'; error: unknown; key: string }
+  | { type: 'fetch'; data: unknown; key: string }
+  | { type: 'invalidate'; data: unknown; key: string }
+  | { type: 'remove'; data: unknown; key: string }
+  | { type: 'set'; data: unknown; key: string }
+  | { type: 'success'; data: unknown; key: string; state: QueryState };
 
-export type QueryFn<TData = unknown> = (context: {
+export type QueryFn<
+  TData = unknown,
+  TQueryKey extends QueryKey = QueryKey,
+> = (context: {
   attempt: number;
-  queryKey: QueryKey;
+  queryKey: TQueryKey;
   signal?: AbortSignal;
   meta?: unknown;
 }) => MaybePromise<TData>;

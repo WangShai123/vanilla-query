@@ -1,4 +1,9 @@
-import { createEffect, createSignal, flushSync } from 'vanilla-signal';
+import {
+  createEffect,
+  createRoot,
+  createSignal,
+  flushSync,
+} from 'vanilla-signal';
 import {
   createQuery,
   createQueryClient,
@@ -73,6 +78,9 @@ const elements = {
   runSuspenseButton: $('#runSuspenseButton'),
   runThrowErrorsButton: $('#runThrowErrorsButton'),
   runSubscribeButton: $('#runSubscribeButton'),
+  runOwnerCleanupButton: $('#runOwnerCleanupButton'),
+  runPersistentCacheButton: $('#runPersistentCacheButton'),
+  runCacheErrorButton: $('#runCacheErrorButton'),
   clearClientButton: $('#clearClientButton'),
   advancedResult: $('#advancedResult'),
   checkList: $('#checkList'),
@@ -206,6 +214,33 @@ const assertCheck = async (name, fn) => {
 
 const expect = (condition, message) => {
   if (!condition) throw new Error(message);
+};
+
+const createMemoryWebStorage = (overrides = {}) => {
+  const store = new Map();
+  const storage = {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store.clear();
+    },
+    getItem(key) {
+      return store.has(key) ? store.get(key) : null;
+    },
+    key(index) {
+      return Array.from(store.keys())[index] ?? null;
+    },
+    removeItem(key) {
+      store.delete(key);
+    },
+    setItem(key, value) {
+      store.set(key, String(value));
+    },
+    ...overrides,
+  };
+
+  return storage;
 };
 
 const api = {
@@ -676,6 +711,7 @@ elements.runAbortButton.addEventListener('click', async () => {
     queryFn: (context) => api.slow(context),
   });
   await delay(80);
+  query.promise()?.catch(() => {});
   query.abort();
   appendResult(
     elements.errorResult,
@@ -758,6 +794,186 @@ elements.runSubscribeButton.addEventListener('click', async () => {
     `${calls} updates`
   );
   query.destroy();
+});
+
+const runOwnerCleanupCheck = async () => {
+  let ownedQuery;
+  const dispose = createRoot((currentDispose) => {
+    ownedQuery = createQuery({
+      client,
+      queryKey: ['owner-cleanup', Date.now()],
+      queryFn: async () => {
+        await delay(120);
+        return 'owned data';
+      },
+    });
+
+    return currentDispose;
+  });
+
+  await ownedQuery.promise();
+  expect(ownedQuery.state.status === 'success', 'owned query should resolve');
+  dispose();
+  expect(ownedQuery.promise() === null, 'owner dispose should destroy query');
+  expect(!ownedQuery.state.isFetching, 'disposed query should not be fetching');
+
+  return ownedQuery.state.status;
+};
+
+elements.runOwnerCleanupButton.addEventListener('click', async () => {
+  try {
+    const status = await runOwnerCleanupCheck();
+    appendResult(elements.advancedResult, 'owner cleanup', `status: ${status}`);
+    setCheck('owner cleanup 自动销毁 query', 'pass', status);
+  } catch (error) {
+    appendResult(
+      elements.advancedResult,
+      'owner cleanup',
+      error.message,
+      'error'
+    );
+    setCheck('owner cleanup 自动销毁 query', 'fail', error.message);
+  }
+});
+
+const runPersistentCacheCheck = async () => {
+  const storage = createMemoryWebStorage();
+  const cache = {
+    adapter: 'localStorage',
+    options: {
+      keySeparator: '@@',
+      storage,
+      ttl: 1000,
+    },
+  };
+  const cacheKey = ['persistent-cache', Date.now()];
+  const firstClient = createQueryClient({ cache });
+
+  await firstClient.prefetchQuery({
+    queryKey: cacheKey,
+    queryFn: async () => 'persisted data',
+    staleTime: 1000,
+  });
+
+  const rawKeys = Array.from({ length: storage.length }, (_, index) =>
+    storage.key(index)
+  ).filter(Boolean);
+  expect(
+    rawKeys.some((key) => key.startsWith('signal@@')),
+    'default namespace should be signal and keySeparator should be forwarded'
+  );
+
+  const secondClient = createQueryClient({ cache });
+  let requestCount = 0;
+  const data = await secondClient.prefetchQuery({
+    queryKey: cacheKey,
+    queryFn: async () => {
+      requestCount += 1;
+      return 'network data';
+    },
+    staleTime: 1000,
+  });
+
+  firstClient.clear();
+  secondClient.clear();
+
+  expect(data === 'persisted data', 'second client should hydrate cached data');
+  expect(requestCount === 0, 'hydrated fresh cache should skip network');
+  return rawKeys[0] ?? 'signal@@...';
+};
+
+elements.runPersistentCacheButton.addEventListener('click', async () => {
+  try {
+    const key = await runPersistentCacheCheck();
+    appendResult(elements.advancedResult, 'localStorage hydrate', key);
+    setCheck('localStorage hydrate 复用持久化缓存', 'pass', key);
+  } catch (error) {
+    appendResult(
+      elements.advancedResult,
+      'localStorage hydrate',
+      error.message,
+      'error'
+    );
+    setCheck('localStorage hydrate 复用持久化缓存', 'fail', error.message);
+  }
+});
+
+const runCacheErrorCheck = async () => {
+  const cacheError = new Error('demo storage denied');
+  const baseStorage = createMemoryWebStorage();
+  const storage = createMemoryWebStorage({
+    getItem: (key) => baseStorage.getItem(key),
+    key: (index) => baseStorage.key(index),
+    removeItem: (key) => baseStorage.removeItem(key),
+    setItem(key, value) {
+      if (key.includes('__vanilla_storage_test__')) {
+        baseStorage.setItem(key, value);
+        return;
+      }
+
+      throw cacheError;
+    },
+  });
+  const cacheEvents = [];
+  const optionErrors = [];
+  const cacheClient = createQueryClient({
+    cache: {
+      adapter: 'localStorage',
+      options: {
+        namespace: 'demo-cache-error',
+        onError(error, context) {
+          optionErrors.push([error, context]);
+        },
+        storage,
+        ttl: 1000,
+      },
+    },
+  });
+  const unsubscribe = cacheClient.subscribe((event) => {
+    if (event.type === 'cache-error') {
+      cacheEvents.push(event);
+    }
+  });
+
+  try {
+    const data = await cacheClient.prefetchQuery({
+      queryKey: ['cache-error', Date.now()],
+      queryFn: async () => 'network still succeeds',
+      staleTime: 1000,
+    });
+
+    expect(
+      data === 'network still succeeds',
+      'query result should still resolve'
+    );
+    expect(cacheEvents.length === 1, 'client should emit one cache-error');
+    expect(optionErrors.length === 1, 'cache options onError should run once');
+    expect(
+      optionErrors[0][1].operation === 'set',
+      'cache error context should expose set operation'
+    );
+
+    return optionErrors[0][1].operation;
+  } finally {
+    unsubscribe();
+    cacheClient.clear();
+  }
+};
+
+elements.runCacheErrorButton.addEventListener('click', async () => {
+  try {
+    const operation = await runCacheErrorCheck();
+    appendResult(elements.advancedResult, 'cache-error', operation);
+    setCheck('cache-error 事件与 options.onError', 'pass', operation);
+  } catch (error) {
+    appendResult(
+      elements.advancedResult,
+      'cache-error',
+      error.message,
+      'error'
+    );
+    setCheck('cache-error 事件与 options.onError', 'fail', error.message);
+  }
 });
 
 elements.clearClientButton.addEventListener('click', () => {
@@ -846,6 +1062,12 @@ const runAllChecks = async () => {
   await delay(260);
   elements.runSubscribeButton.click();
   await delay(240);
+  elements.runOwnerCleanupButton.click();
+  await delay(220);
+  elements.runPersistentCacheButton.click();
+  await delay(180);
+  elements.runCacheErrorButton.click();
+  await delay(180);
 };
 
 const init = () => {

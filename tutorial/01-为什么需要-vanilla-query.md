@@ -1,10 +1,10 @@
-# 第 1 集：为什么需要 vanilla-query
+# 第 1 集：为什么需要 vanilla-signal-query
 
 ## 本集目标
 
 这一集讲清楚三个问题：
 
-- `vanilla-query` 解决什么问题。
+- `vanilla-signal-query` 解决什么问题。
 - 什么是服务端状态。
 - `createQuery` 的核心心智模型是什么。
 
@@ -21,7 +21,7 @@
 - 网络失败时，需要重试。
 - 重复进入页面时，不希望每次都重新请求。
 
-`vanilla-query` 就是用来管理这些服务端状态的。
+`vanilla-signal-query` 就是用来管理这些服务端状态的。
 
 ## 1. 什么是服务端状态
 
@@ -41,7 +41,7 @@
 - 写操作完成后，需要刷新或失效相关数据。
 - 请求过程会出现 loading、refreshing、error、retry。
 
-`vanilla-query` 关注的是第二类状态。
+`vanilla-signal-query` 关注的是第二类状态。
 
 ## 2. createQuery 最小示例
 
@@ -146,7 +146,7 @@ query.state.isError; // 最近一次请求失败
 
 口播：
 
-`vanilla-query` 只负责数据层。
+`vanilla-signal-query` 只负责数据层。
 
 它不会决定 DOM 怎么写，也不会内置 loading 组件或 error 组件。
 

@@ -1,4 +1,13 @@
-import { access, createDeepStore, createEffect, untrack } from 'vanilla-signal';
+import {
+  access,
+  batch,
+  createDeepStore,
+  createEffect,
+  getOwner,
+  onCleanup,
+  untrack,
+} from 'vanilla-signal';
+import type { Computation } from 'vanilla-signal';
 
 import { isEntryStaleByTime } from './cache.ts';
 import { createQueryClient } from './client.ts';
@@ -6,8 +15,8 @@ import { hashQueryKey } from './hash.ts';
 import { normalizeOptions } from './options.ts';
 import { now } from './time.ts';
 import type {
-  Accessor,
   ExecuteOptions,
+  MaybeQueryAccessor,
   Query,
   QueryFn,
   QueryKey,
@@ -17,20 +26,29 @@ import type {
 
 const defaultClient = createQueryClient();
 
-export function createQuery<TData = unknown>(
-  options: QueryFn<TData> | QueryOptions<TData>
-): Query<TData> {
+export function createQuery<
+  TData = unknown,
+  TQueryFnData = TData,
+  TQueryKey extends QueryKey = QueryKey,
+  TError = unknown,
+>(
+  options:
+    | QueryFn<TQueryFnData, TQueryKey>
+    | QueryOptions<TData, TQueryFnData, TQueryKey, TError>
+): Query<TData, TQueryKey, TError> {
   if (typeof options === 'function') {
     options = { queryFn: options };
   }
 
   const rawOptions = options;
-  const queryOptions = normalizeOptions<TData>(options);
+  const queryOptions = normalizeOptions<TData, TQueryFnData, TQueryKey, TError>(
+    options
+  );
   const client = queryOptions.client || defaultClient;
   if (typeof queryOptions.queryFn !== 'function') {
     throw new TypeError('createQuery requires a queryFn');
   }
-  const queryFn = queryOptions.queryFn as QueryFn<TData>;
+  const queryFn = queryOptions.queryFn as QueryFn<TQueryFnData, TQueryKey>;
 
   const initialData = resolveValue(queryOptions.initialData);
   const hasInitialData = initialData !== undefined;
@@ -52,17 +70,17 @@ export function createQuery<TData = unknown>(
     dataUpdatedAt: initialUpdatedAt,
     errorUpdatedAt: 0,
     updatedAt: initialUpdatedAt,
-  }) as QueryState<TData>;
+  }) as QueryState<TData, TError>;
 
   let requestId = 0;
   let currentKey = '';
-  let currentQueryKey: QueryKey = undefined;
+  let currentQueryKey: TQueryKey | undefined = undefined;
   let currentPromise: Promise<TData | undefined> | null = null;
   let currentAbortController: AbortController | undefined | null = null;
   let disposed = false;
-  let latestQueryKey: QueryKey = undefined;
+  let latestQueryKey = undefined as TQueryKey;
   const subscribers = new Set<
-    (state: QueryState<TData>, snapshot: unknown[]) => void
+    (state: QueryState<TData, TError>, snapshot: unknown[]) => void
   >();
 
   const query = function readQueryData() {
@@ -75,7 +93,7 @@ export function createQuery<TData = unknown>(
     }
 
     return state.data;
-  } as Query<TData>;
+  } as Query<TData, TQueryKey, TError>;
 
   query.state = state;
   query.key = () => currentKey || hashQueryKey(readQueryKey(queryOptions));
@@ -132,7 +150,7 @@ export function createQuery<TData = unknown>(
   query.destroy = destroy;
   query.subscribe = subscribe;
 
-  const effect = createEffect(() => {
+  const effect: Computation = createEffect(() => {
     const nextQueryKey = readQueryKey(queryOptions);
     const nextKey = hashQueryKey(nextQueryKey);
     const enabled = readEnabled(queryOptions);
@@ -145,7 +163,9 @@ export function createQuery<TData = unknown>(
       const keyChanged = nextKey !== currentKey;
       currentKey = nextKey;
       currentQueryKey = nextQueryKey;
-      state.isPaused = !enabled;
+      batch(() => {
+        state.isPaused = !enabled;
+      });
 
       if (!enabled) {
         setIdleState({ keepData: true });
@@ -187,10 +207,14 @@ export function createQuery<TData = unknown>(
         execute({
           force: false,
           keepPreviousData: queryOptions.keepPreviousData,
-        }).catch(() => {});
+        }).catch(noop);
       }
     });
   });
+
+  if (getOwner()) {
+    onCleanup(destroy);
+  }
 
   return query;
 
@@ -229,7 +253,7 @@ export function createQuery<TData = unknown>(
 
     beginFetch({ keepData });
 
-    const task = client.fetchQuery<TData>({
+    const task = client.fetchQuery<TData, TQueryFnData, TQueryKey, TError>({
       key,
       queryKey,
       queryFn,
@@ -271,8 +295,9 @@ export function createQuery<TData = unknown>(
       return result.data;
     } catch (error) {
       if (disposed || fetchId !== requestId) return state.data;
-      applyError(error);
-      queryOptions.onError?.(error, {
+      const typedError = error as TError;
+      applyError(typedError);
+      queryOptions.onError?.(typedError, {
         query,
         queryKey,
         key,
@@ -300,20 +325,22 @@ export function createQuery<TData = unknown>(
     const hasData = state.data !== undefined;
     const shouldKeepData = keepData && hasData;
 
-    if (!shouldKeepData) {
-      state.data = undefined;
-    }
+    batch(() => {
+      if (!shouldKeepData) {
+        state.data = undefined;
+      }
 
-    state.error = null;
-    state.isError = false;
-    state.isFetching = true;
-    state.isLoading = !shouldKeepData;
-    state.isPending = !shouldKeepData && state.data === undefined;
-    state.isPaused = false;
-    state.isStale = shouldKeepData;
-    state.fetchStatus = 'fetching';
-    state.status = shouldKeepData ? state.status : 'pending';
-    state.updatedAt = now();
+      state.error = null;
+      state.isError = false;
+      state.isFetching = true;
+      state.isLoading = !shouldKeepData;
+      state.isPending = !shouldKeepData && state.data === undefined;
+      state.isPaused = false;
+      state.isStale = shouldKeepData;
+      state.fetchStatus = 'fetching';
+      state.status = shouldKeepData ? state.status : 'pending';
+      state.updatedAt = now();
+    });
   }
 
   function applySuccess(
@@ -324,72 +351,80 @@ export function createQuery<TData = unknown>(
       updatedAt,
     }: { key: string; notify: boolean; updatedAt: number }
   ) {
-    state.data = data;
-    state.latest = data;
-    state.error = null;
-    state.failureCount = 0;
-    state.isError = false;
-    state.isFetching = false;
-    state.isLoading = false;
-    state.isPending = false;
-    state.isPaused = false;
-    state.isStale = isEntryStaleByTime(updatedAt, queryOptions.staleTime);
-    state.isSuccess = true;
-    state.status = 'success';
-    state.fetchStatus = 'idle';
-    state.dataUpdatedAt = updatedAt;
-    state.updatedAt = updatedAt;
+    batch(() => {
+      state.data = data;
+      state.latest = data;
+      state.error = null;
+      state.failureCount = 0;
+      state.isError = false;
+      state.isFetching = false;
+      state.isLoading = false;
+      state.isPending = false;
+      state.isPaused = false;
+      state.isStale = isEntryStaleByTime(updatedAt, queryOptions.staleTime);
+      state.isSuccess = true;
+      state.status = 'success';
+      state.fetchStatus = 'idle';
+      state.dataUpdatedAt = updatedAt;
+      state.updatedAt = updatedAt;
+    });
 
     if (notify) {
       client.notify({ type: 'success', key, data, state });
     }
   }
 
-  function applyError(error: any) {
-    state.error = error;
-    state.failureCount += 1;
-    state.isError = true;
-    state.isFetching = false;
-    state.isLoading = false;
-    state.isPending = false;
-    state.isPaused = false;
-    state.isStale = state.data !== undefined;
-    state.isSuccess = false;
-    state.status = 'error';
-    state.fetchStatus = 'idle';
-    state.errorUpdatedAt = now();
-    state.updatedAt = state.errorUpdatedAt;
+  function applyError(error: TError) {
+    batch(() => {
+      state.error = error;
+      state.failureCount += 1;
+      state.isError = true;
+      state.isFetching = false;
+      state.isLoading = false;
+      state.isPending = false;
+      state.isPaused = false;
+      state.isStale = state.data !== undefined;
+      state.isSuccess = false;
+      state.status = 'error';
+      state.fetchStatus = 'idle';
+      state.errorUpdatedAt = now();
+      state.updatedAt = state.errorUpdatedAt;
+    });
   }
 
   function resetForNewKey() {
-    state.data = undefined;
-    state.error = null;
-    state.isError = false;
-    state.isLoading = false;
-    state.isPending = true;
-    state.isStale = false;
-    state.isSuccess = false;
-    state.status = 'pending';
-    state.fetchStatus = 'idle';
+    batch(() => {
+      state.data = undefined;
+      state.error = null;
+      state.isError = false;
+      state.isLoading = false;
+      state.isPending = true;
+      state.isStale = false;
+      state.isSuccess = false;
+      state.status = 'pending';
+      state.fetchStatus = 'idle';
+    });
   }
 
   function setIdleState({ keepData }: { keepData: boolean }) {
-    if (!keepData) {
-      state.data = undefined;
-      state.latest = undefined;
-      state.error = null;
-      state.failureCount = 0;
-      state.isError = false;
-      state.isPending = true;
-      state.isSuccess = false;
-      state.status = 'pending';
-      state.dataUpdatedAt = 0;
-      state.errorUpdatedAt = 0;
-    }
+    batch(() => {
+      if (!keepData) {
+        state.data = undefined;
+        state.latest = undefined;
+        state.error = null;
+        state.failureCount = 0;
+        state.isError = false;
+        state.isPending = true;
+        state.isSuccess = false;
+        state.status = 'pending';
+        state.dataUpdatedAt = 0;
+        state.errorUpdatedAt = 0;
+      }
 
-    state.isFetching = false;
-    state.isLoading = false;
-    state.fetchStatus = 'idle';
+      state.isFetching = false;
+      state.isLoading = false;
+      state.fetchStatus = 'idle';
+    });
   }
 
   function abort() {
@@ -397,21 +432,23 @@ export function createQuery<TData = unknown>(
     currentAbortController?.abort?.();
     currentAbortController = null;
     currentPromise = null;
-    state.isFetching = false;
-    state.isLoading = false;
-    state.fetchStatus = 'idle';
+    batch(() => {
+      state.isFetching = false;
+      state.isLoading = false;
+      state.fetchStatus = 'idle';
+    });
   }
 
   function destroy() {
     if (disposed) return;
     disposed = true;
     abort();
-    effect?.dispose?.();
+    effect.dispose();
     subscribers.clear();
   }
 
   function subscribe(
-    callback: (state: QueryState<TData>, snapshot: unknown[]) => void
+    callback: (state: QueryState<TData, TError>, snapshot: unknown[]) => void
   ) {
     if (typeof callback !== 'function') {
       throw new TypeError('query.subscribe requires a callback');
@@ -435,7 +472,7 @@ export function createQuery<TData = unknown>(
 
     return () => {
       subscribers.delete(callback);
-      subscription.dispose?.();
+      subscription.dispose();
     };
   }
 
@@ -448,15 +485,19 @@ export function createQuery<TData = unknown>(
 
 export { defaultClient as queryClient };
 
-function readQueryKey(options: { queryKey?: Accessor<QueryKey> }) {
+function readQueryKey<TQueryKey extends QueryKey>(options: {
+  queryKey?: MaybeQueryAccessor<TQueryKey>;
+}): TQueryKey {
   const key = access(options.queryKey);
-  return key === undefined ? ['anonymous'] : key;
+  return (key === undefined ? ['anonymous'] : key) as TQueryKey;
 }
 
-function readEnabled(options: { enabled?: Accessor<boolean> }) {
+function readEnabled(options: { enabled?: MaybeQueryAccessor<boolean> }) {
   return options.enabled !== false && access(options.enabled) !== false;
 }
 
-function resolveValue<TValue>(value: Accessor<TValue>) {
+function resolveValue<TValue>(value: MaybeQueryAccessor<TValue>) {
   return typeof value === 'function' ? (value as () => TValue)() : value;
 }
+
+function noop() {}

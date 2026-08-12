@@ -1,60 +1,84 @@
-import type { QueryOptions } from './types.ts';
+import type { NormalizeFn, QueryOptions } from './types.ts';
 
-export function normalizeResponse(response: any) {
+export interface BusinessError extends Error {
+  code?: unknown;
+  response?: unknown;
+}
+
+export interface NormalizedResponse<TData = unknown> {
+  data: TData;
+}
+
+export function normalizeResponse<TData = unknown>(
+  response: unknown
+): NormalizedResponse<TData> {
   if (
     response &&
     typeof response === 'object' &&
     Object.prototype.hasOwnProperty.call(response, 'success')
   ) {
-    if (response.success === false) {
-      const error = new Error(response.message || 'Business Error');
+    const record = response as Record<string, unknown>;
+
+    if (record.success === false) {
+      const error = new Error(
+        typeof record.message === 'string' ? record.message : 'Business Error'
+      ) as BusinessError;
       error.name = 'BusinessError';
-      (error as any).code = response.code;
-      (error as any).response = response;
+      error.code = record.code;
+      error.response = response;
       throw error;
     }
 
     return {
-      data: Object.prototype.hasOwnProperty.call(response, 'data')
-        ? response.data
-        : response,
+      data: (Object.prototype.hasOwnProperty.call(record, 'data')
+        ? record.data
+        : response) as TData,
     };
   }
 
-  return { data: response };
+  return { data: response as TData };
 }
 
-export function normalizeResult(
+export function normalizeResult<TData = unknown>(
   response: unknown,
-  normalize?: false | ((response: unknown) => unknown)
-) {
-  if (normalize === false) return { data: response };
-  const normalized = (normalize || normalizeResponse)(response);
+  normalize?: false | NormalizeFn<TData>
+): NormalizedResponse<TData> {
+  if (normalize === false) return { data: response as TData };
+  const normalized = (normalize || normalizeResponse<TData>)(response);
   if (
     !normalized ||
     typeof normalized !== 'object' ||
     !('data' in normalized)
   ) {
-    return { data: normalized };
+    return { data: normalized as TData };
   }
-  return normalized as { data: any };
+  return normalized as NormalizedResponse<TData>;
 }
 
-export function shouldRetry(error: any) {
+export function shouldRetry(error: unknown) {
   if (!error) return false;
-  if (error.name === 'AbortError') return false;
-  if (error.name === 'TimeoutError') return true;
+  const record = error as {
+    name?: unknown;
+    response?: { status?: unknown };
+    status?: unknown;
+  };
 
-  const status = error.status ?? error.response?.status;
+  if (record.name === 'AbortError') return false;
+  if (record.name === 'TimeoutError') return true;
+
+  const status = Number(record.status ?? record.response?.status);
   if (status >= 400 && status < 500) return false;
 
   return true;
 }
 
-export function canRetry(
-  error: any,
+export function canRetry<TError = unknown>(
+  error: TError,
   attempt: number,
-  options: QueryOptions<any>
+  options: Pick<
+    QueryOptions<unknown, unknown, unknown, TError>,
+    'retry' | 'shouldRetry'
+  >
 ) {
   const retry = options.retry;
   const should = options.shouldRetry || shouldRetry;
@@ -65,10 +89,10 @@ export function canRetry(
   return attempt <= Number(retry || 0);
 }
 
-export function resolveRetryDelay(
-  retryDelay: QueryOptions['retryDelay'],
+export function resolveRetryDelay<TError = unknown>(
+  retryDelay: QueryOptions<unknown, unknown, unknown, TError>['retryDelay'],
   attempt: number,
-  error: any
+  error: TError
 ) {
   const delay =
     typeof retryDelay === 'function' ? retryDelay(attempt, error) : retryDelay;

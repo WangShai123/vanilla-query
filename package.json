@@ -1,11 +1,10 @@
 {
   "name": "vanilla-signal-query",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "private": false,
   "description": "An asynchronous data fetching and server state management library designed for vanilla JavaScript applications.",
   "keywords": [
     "fetch",
-    "javascript",
     "query",
     "signal",
     "vanilla"
@@ -21,8 +20,7 @@
     "url": "git+https://github.com/WangShai123/vanilla-query.git"
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -39,19 +37,27 @@
   },
   "scripts": {
     "build": "vp pack",
+    "pack": "vp check --fix && vp pack",
     "dev": "vp pack --watch",
     "test": "vp test",
     "check": "vp check",
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
-    "vanilla-create-storage": "latest",
-    "vanilla-signal": "latest",
-    "vanilla-simple-lru": "latest"
+    "vanilla-create-storage": "^1.0.4",
+    "vanilla-signal": "^1.1.14",
+    "vanilla-simple-lru": "^1.0.2"
   },
   "devDependencies": {
     "@types/node": "^25.9.5",
     "typescript": "^7.0.2",
     "vite-plus": "^0.2.7"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "12.0.2",
+      "onFail": "download"
+    }
   }
 }

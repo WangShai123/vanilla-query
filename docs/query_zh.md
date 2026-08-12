@@ -1,6 +1,6 @@
-# Vanilla Query 文档
+# Vanilla Signal Query 文档
 
-`vanilla-query` 是面向原生 JavaScript 业务请求场景的异步状态管理库。它提供响应式请求状态、可插拔数据缓存、请求去重、重试、超时、取消、预取和缓存失效能力。
+`vanilla-signal-query` 是面向原生 JavaScript 业务请求场景的异步状态管理库。它提供响应式请求状态、可插拔数据缓存、请求去重、重试、超时、取消、预取和缓存失效能力。
 
 ## 设计目标
 
@@ -148,6 +148,25 @@ queryFn({
 - `signal`：用于取消 fetch。
 - `meta`：`refetch({ meta })` 或 `prefetchQuery({ meta })` 传入的附加信息。
 
+`queryFn` 是请求执行边界。`vanilla-signal-query` 负责管理 query 状态和缓存；这个函数自身决定如何请求数据，以及返回什么业务数据。
+
+## TypeScript 类型
+
+简单数据可以由 `createQuery` 自动推断。严格 TypeScript 项目可以传入最终数据、queryFn 原始数据和 tuple queryKey 的泛型：
+
+```ts
+const user = createQuery<User, UserResponse, ['user', number]>({
+  queryKey: () => ['user', userId()],
+  queryFn: async ({ queryKey, signal }) => {
+    const response = await fetch(`/api/users/${queryKey[1]}`, { signal });
+    return response.json();
+  },
+  select: (response) => response.data,
+});
+```
+
+导出的类型包括 `Query`、`QueryOptions`、`QueryFn`、`QueryState`、`MaybeQueryAccessor`、缓存配置类型和缓存错误上下文类型。
+
 ## 常用方法
 
 ```js
@@ -192,7 +211,7 @@ createQuery({
 - `cache.adapter`：可选 `memory`、`cookie`、`localStorage`、`indexedDB`。
 - `cache.options.ttl`：缓存记录保留时间。默认 5 分钟，所有适配器都支持。
 - `cache.options.maxSize`：memory 适配器的 LRU 最大缓存条数。默认 100。
-- `cache.options.namespace`：持久化适配器的存储命名空间。默认 `vanilla-query`。
+- `cache.options.namespace`：持久化适配器的存储命名空间。默认 `signal`。
 
 示例：
 
@@ -215,12 +234,14 @@ const user = createQuery({
 
 适配器默认配置：
 
-| Adapter        | 存储位置                                     | 默认配置                                      |
-| -------------- | -------------------------------------------- | --------------------------------------------- |
-| `memory`       | `vanilla-simple-lru`                         | `{ ttl: 300000, maxSize: 100 }`               |
-| `cookie`       | `vanilla-create-storage` cookie driver       | `{ ttl: 300000, namespace: 'vanilla-query' }` |
-| `localStorage` | `vanilla-create-storage` localStorage driver | `{ ttl: 300000, namespace: 'vanilla-query' }` |
-| `indexedDB`    | `vanilla-create-storage` indexedDB driver    | `{ ttl: 300000, namespace: 'vanilla-query' }` |
+| Adapter        | 存储位置                                     | 默认配置                               |
+| -------------- | -------------------------------------------- | -------------------------------------- |
+| `memory`       | `vanilla-simple-lru`                         | `{ ttl: 300000, maxSize: 100 }`        |
+| `cookie`       | `vanilla-create-storage` cookie driver       | `{ ttl: 300000, namespace: 'signal' }` |
+| `localStorage` | `vanilla-create-storage` localStorage driver | `{ ttl: 300000, namespace: 'signal' }` |
+| `indexedDB`    | `vanilla-create-storage` indexedDB driver    | `{ ttl: 300000, namespace: 'signal' }` |
+
+持久化适配器会维护一份 memory shadow cache，并从所选浏览器存储中 hydrate 数据。query 执行和 `prefetchQuery` 使用异步缓存路径，可以等待 hydrate。`getQueryEntry` 是同步方法，读取的是当前已经进入 memory 的缓存视图。
 
 ## Query Client
 
@@ -283,7 +304,17 @@ const unsubscribe = queryClient.subscribe((event) => {
 });
 ```
 
-事件类型包括 `set`、`fetch`、`success`、`error`、`invalidate`、`remove`、`clear`。
+事件类型包括 `set`、`fetch`、`success`、`error`、`cache-error`、`invalidate`、`remove`、`clear`。
+
+```js
+const unsubscribe = queryClient.subscribe((event) => {
+  if (event.type === 'cache-error') {
+    console.error(event.error);
+  }
+});
+```
+
+持久化缓存写入失败不会改变成功的 query 结果，但会通过 `cache-error` 暴露。
 
 ## 重试
 
@@ -408,4 +439,4 @@ createQuery({
 - 需要缓存、预取、去重、失效或乐观更新。
 - 需要统一处理 loading、refreshing、error、retry 状态。
 
-`vanilla-query` 不负责 DOM 渲染。UI 层只消费 `query()` 和 `query.state`，渲染方式由应用自己决定。
+`vanilla-signal-query` 不负责 DOM 渲染。UI 层只消费 `query()` 和 `query.state`，渲染方式由应用自己决定。

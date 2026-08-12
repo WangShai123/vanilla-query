@@ -1,4 +1,4 @@
-import { createSignal } from 'vanilla-signal';
+import { createRoot, createSignal } from 'vanilla-signal';
 import { describe, expect, it, vi } from 'vite-plus/test';
 
 import {
@@ -7,12 +7,22 @@ import {
   hashQueryKey,
   stableHash,
 } from '../src/index.ts';
-import type { QueryCacheOptions, QueryClientEvent } from '../src/index.ts';
+import type {
+  CacheErrorContext,
+  QueryCacheOptions,
+  QueryClientEvent,
+} from '../src/index.ts';
 
 interface Todo {
   id: number;
   text: string;
 }
+
+interface CodedError extends Error {
+  code?: unknown;
+}
+
+type QueryCacheErrorEvent = Extract<QueryClientEvent, { type: 'cache-error' }>;
 
 type MemoryWebStorageOverrides = Partial<Storage>;
 
@@ -153,8 +163,8 @@ describe('createQuery', () => {
 
     await expect(query.promise()).rejects.toThrow('No access');
     expect(query.state.status).toBe('error');
-    expect(query.state.error.name).toBe('BusinessError');
-    expect(query.state.error.code).toBe('NO_ACCESS');
+    expect((query.state.error as CodedError).name).toBe('BusinessError');
+    expect((query.state.error as CodedError).code).toBe('NO_ACCESS');
 
     query.destroy();
   });
@@ -190,6 +200,53 @@ describe('createQuery', () => {
     expect(query.state.isStale).toBe(false);
 
     query.destroy();
+  });
+
+  it('types tuple query keys and selected data', async () => {
+    const client = createQueryClient();
+    const [userId] = createSignal(7);
+    const query = createQuery<
+      number,
+      { value: number },
+      ['typed-user', number]
+    >({
+      client,
+      queryKey: () => ['typed-user', userId()],
+      queryFn: async ({ queryKey }) => ({
+        value: queryKey[1] * 2,
+      }),
+      select: (response) => response.value,
+    });
+
+    await query.promise();
+
+    expect(query.queryKey()).toEqual(['typed-user', 7]);
+    expect(query()).toBe(14);
+
+    query.destroy();
+  });
+
+  it('destroys queries with the current vanilla-signal owner', async () => {
+    const client = createQueryClient();
+    let query: ReturnType<typeof createQuery<string>> | undefined;
+
+    const dispose = createRoot((currentDispose) => {
+      query = createQuery({
+        client,
+        queryKey: ['owner-cleanup'],
+        queryFn: async () => 'owned',
+      });
+
+      return currentDispose;
+    });
+
+    await query?.promise();
+    expect(query?.state.status).toBe('success');
+
+    dispose();
+
+    expect(query?.promise()).toBeNull();
+    expect(query?.state.isFetching).toBe(false);
   });
 
   it('mutates local state and cache', async () => {
@@ -273,7 +330,7 @@ describe('createQuery', () => {
     });
 
     await expect(query.promise()).rejects.toThrow('Query timed out');
-    expect(query.state.error.name).toBe('TimeoutError');
+    expect((query.state.error as Error).name).toBe('TimeoutError');
 
     query.destroy();
   });
@@ -434,6 +491,37 @@ describe('createQuery', () => {
     expect(queryFn).toHaveBeenCalledTimes(1);
   });
 
+  it('persists fresh query data through cookie adapter', async () => {
+    const document = createMemoryCookieDocument();
+    const cache: QueryCacheOptions = {
+      adapter: 'cookie',
+      options: {
+        document,
+        namespace: 'query-cookie-test',
+        ttl: 1000,
+      },
+    };
+
+    const firstClient = createQueryClient({ cache });
+    await firstClient.prefetchQuery({
+      queryKey: ['cookie'],
+      queryFn: async () => 'cookie-data',
+      staleTime: 1000,
+    });
+
+    const secondClient = createQueryClient({ cache });
+    const queryFn = vi.fn(async () => 'network');
+    const data = await secondClient.prefetchQuery({
+      queryKey: ['cookie'],
+      queryFn,
+      staleTime: 1000,
+    });
+
+    expect(data).toBe('cookie-data');
+    expect(queryFn).not.toHaveBeenCalled();
+    expect(document.cookie).toContain('query-cookie-test');
+  });
+
   it('emits cache-error events when persistent cache writes fail', async () => {
     const error = new Error('storage denied');
     const baseStorage = createMemoryWebStorage();
@@ -450,16 +538,14 @@ describe('createQuery', () => {
         throw error;
       },
     });
-    const cacheErrors: QueryClientEvent[] = [];
-    const optionErrors: Array<
-      [unknown, { key?: string; operation?: string; [key: string]: unknown }]
-    > = [];
+    const cacheErrors: QueryCacheErrorEvent[] = [];
+    const optionErrors: Array<[unknown, CacheErrorContext]> = [];
     const client = createQueryClient({
       cache: {
         adapter: 'localStorage',
         options: {
           namespace: 'query-error-test',
-          onError(currentError: unknown, context: Record<string, unknown>) {
+          onError(currentError: unknown, context: CacheErrorContext) {
             optionErrors.push([currentError, context]);
           },
           storage,
@@ -469,7 +555,10 @@ describe('createQuery', () => {
     });
 
     client.subscribe((event) => {
-      if (event.type === 'cache-error') cacheErrors.push(event);
+      if (event.type === 'cache-error') {
+        expect(event.error).toBeDefined();
+        cacheErrors.push(event);
+      }
     });
 
     const data = await client.prefetchQuery({
@@ -486,6 +575,35 @@ describe('createQuery', () => {
     expect(optionErrors[0][1].operation).toBe('set');
   });
 });
+
+function createMemoryCookieDocument(): Document {
+  const store = new Map<string, string>();
+
+  return {
+    get cookie() {
+      return Array.from(store, ([key, value]) => `${key}=${value}`).join('; ');
+    },
+    set cookie(value: string) {
+      const [pair, ...attributes] = value.split(';').map((item) => item.trim());
+      const separatorIndex = pair.indexOf('=');
+      if (separatorIndex < 0) return;
+
+      const key = pair.slice(0, separatorIndex);
+      const cookieValue = pair.slice(separatorIndex + 1);
+      const expired = attributes.some((attribute) => {
+        const [name, attributeValue] = attribute.split('=');
+        return name.toLowerCase() === 'max-age' && Number(attributeValue) <= 0;
+      });
+
+      if (expired) {
+        store.delete(key);
+        return;
+      }
+
+      store.set(key, cookieValue);
+    },
+  } as Document;
+}
 
 function createMemoryWebStorage(
   overrides: MemoryWebStorageOverrides = {}

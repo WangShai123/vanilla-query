@@ -141,7 +141,7 @@ export function createProductsQuery(params) {
 
 ## 7. 收尾总结
 
-`vanilla-query` 的核心不是替你渲染页面，而是把服务端状态管清楚。
+`vanilla-signal-query` 的核心不是替你渲染页面，而是把服务端状态管清楚。
 
 记住几个关键词：
 
@@ -152,4 +152,4 @@ export function createProductsQuery(params) {
 - `mutate` 本地更新。
 - `invalidateQueries` 让相关数据过期。
 
-到这里，`vanilla-query` 的核心业务请求流程就完整了。
+到这里，`vanilla-signal-query` 的核心业务请求流程就完整了。

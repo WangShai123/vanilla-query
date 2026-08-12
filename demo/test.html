@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vanilla Query 实战演示与测试</title>
+    <title>Vanilla Signal Query 实战演示与测试</title>
     <link rel="stylesheet" href="./test.css" />
     <script type="importmap">
       {
@@ -20,7 +20,7 @@
     <div class="app-shell">
       <header class="topbar">
         <div>
-          <h1>Vanilla Query 实战演示与测试</h1>
+          <h1>Vanilla Signal Query 实战演示与测试</h1>
           <p>
             使用模拟业务接口覆盖
             createQuery、queryClient、缓存、失效、预取、重试、超时、取消、mutate
@@ -236,7 +236,8 @@
                 <div>
                   <h2>高级读取与订阅</h2>
                   <p>
-                    suspense、throwErrors、query.subscribe、client.subscribe。
+                    suspense、throwErrors、owner
+                    cleanup、持久化缓存、cache-error。
                   </p>
                 </div>
                 <span id="advancedBadge" class="badge">ready</span>
@@ -259,6 +260,27 @@
                     type="button"
                   >
                     query.subscribe
+                  </button>
+                  <button
+                    id="runOwnerCleanupButton"
+                    class="secondary"
+                    type="button"
+                  >
+                    owner cleanup
+                  </button>
+                  <button
+                    id="runPersistentCacheButton"
+                    class="secondary"
+                    type="button"
+                  >
+                    localStorage hydrate
+                  </button>
+                  <button
+                    id="runCacheErrorButton"
+                    class="secondary"
+                    type="button"
+                  >
+                    cache-error
                   </button>
                   <button
                     id="clearClientButton"

@@ -1,8 +1,8 @@
-# Vanilla Query 设计说明
+# Vanilla Signal Query 设计说明
 
 ## 设计原则
 
-`vanilla-query` 专注于服务端状态管理。它只处理请求、缓存、状态、失效和请求生命周期，不绑定 DOM 渲染，也不规定 UI 组织方式。
+`vanilla-signal-query` 专注于浏览器端 server state 管理。它处理 query 状态、缓存、失效和请求生命周期，不绑定 DOM 渲染，也不规定 UI 组织方式。
 
 核心原则：
 
@@ -19,6 +19,8 @@
 - `createQuery(options)`：单个业务请求实例，负责解析 `queryKey`、维护状态、触发请求和暴露控制方法。
 - `createQueryClient(options)`：请求协调器，负责 pending 去重、预取、失效、删除和事件通知。
 - 缓存适配器：负责把 query 记录保留在 memory、cookie、localStorage 或 indexedDB 中。
+
+具体 HTTP 或异步数据请求位于 `queryFn` 中。`vanilla-signal-query` 调用 `queryFn` 并管理返回的数据；它不提供 base URL、headers、interceptor 或响应传输层能力。
 
 默认提供一个共享 `queryClient`。如果需要隔离缓存，可以创建独立 client：
 
@@ -148,6 +150,8 @@ isStale = invalidated || Date.now() - updatedAt >= staleTime;
 - `indexedDB`：持久化适配器，底层使用 `vanilla-create-storage`。
 
 fresh cache 命中时，query 直接使用缓存。stale cache 命中时，query 可以先展示旧数据，再发起后台刷新。
+
+持久化适配器会维护 memory shadow cache，并从所选浏览器存储中 hydrate 记录。异步 query 执行可以等待 hydrate；同步缓存读取暴露当前 memory 中已有的视图。
 
 ## 请求模型
 

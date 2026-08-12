@@ -1,6 +1,6 @@
-# Vanilla Query Documentation
+# Vanilla Signal Query Documentation
 
-`vanilla-query` is an asynchronous state management library designed for native JavaScript business request scenarios. It provides reactive request states, pluggable data caching, request deduplication, retry mechanisms, timeout handling, cancellation, prefetching, and cache invalidation capabilities.
+`vanilla-signal-query` is an asynchronous state management library designed for native JavaScript business request scenarios. It provides reactive request states, pluggable data caching, request deduplication, retry mechanisms, timeout handling, cancellation, prefetching, and cache invalidation capabilities.
 
 ## Design Goals
 
@@ -148,6 +148,25 @@ queryFn({
 - `signal`: Used to cancel fetch.
 - `meta`: Additional information passed via `refetch({ meta })` or `prefetchQuery({ meta })`.
 
+`queryFn` is the request execution boundary. `vanilla-signal-query` manages query state and cache; the function itself decides how to request data and what business data to return.
+
+## TypeScript Types
+
+`createQuery` can infer simple data automatically. For stricter projects, pass generics for final data, raw query function data, and tuple query keys:
+
+```ts
+const user = createQuery<User, UserResponse, ['user', number]>({
+  queryKey: () => ['user', userId()],
+  queryFn: async ({ queryKey, signal }) => {
+    const response = await fetch(`/api/users/${queryKey[1]}`, { signal });
+    return response.json();
+  },
+  select: (response) => response.data,
+});
+```
+
+The exported types include `Query`, `QueryOptions`, `QueryFn`, `QueryState`, `MaybeQueryAccessor`, cache option types, and cache error context types.
+
 ## Common Methods
 
 ```js
@@ -192,7 +211,7 @@ createQuery({
 - `cache.adapter`: One of `memory`, `cookie`, `localStorage`, or `indexedDB`.
 - `cache.options.ttl`: Cache record retention time. Default is 5 minutes and applies to every adapter.
 - `cache.options.maxSize`: Maximum LRU entries for the memory adapter. Default is 100.
-- `cache.options.namespace`: Storage namespace for persistent adapters. Default is `vanilla-query`.
+- `cache.options.namespace`: Storage namespace for persistent adapters. Default is `signal`.
 
 Example:
 
@@ -215,12 +234,14 @@ Creating a query with the same key within one minute will use the cache directly
 
 Adapter defaults:
 
-| Adapter        | Backing store                                | Default options                               |
-| -------------- | -------------------------------------------- | --------------------------------------------- |
-| `memory`       | `vanilla-simple-lru`                         | `{ ttl: 300000, maxSize: 100 }`               |
-| `cookie`       | `vanilla-create-storage` cookie driver       | `{ ttl: 300000, namespace: 'vanilla-query' }` |
-| `localStorage` | `vanilla-create-storage` localStorage driver | `{ ttl: 300000, namespace: 'vanilla-query' }` |
-| `indexedDB`    | `vanilla-create-storage` indexedDB driver    | `{ ttl: 300000, namespace: 'vanilla-query' }` |
+| Adapter        | Backing store                                | Default options                        |
+| -------------- | -------------------------------------------- | -------------------------------------- |
+| `memory`       | `vanilla-simple-lru`                         | `{ ttl: 300000, maxSize: 100 }`        |
+| `cookie`       | `vanilla-create-storage` cookie driver       | `{ ttl: 300000, namespace: 'signal' }` |
+| `localStorage` | `vanilla-create-storage` localStorage driver | `{ ttl: 300000, namespace: 'signal' }` |
+| `indexedDB`    | `vanilla-create-storage` indexedDB driver    | `{ ttl: 300000, namespace: 'signal' }` |
+
+Persistent adapters keep an in-memory shadow cache and hydrate data from the selected browser storage. Query execution and `prefetchQuery` use the async cache path and can wait for hydration. `getQueryEntry` is synchronous and reads the cache view that is currently available in memory.
 
 ## Query Client
 
@@ -283,7 +304,17 @@ const unsubscribe = queryClient.subscribe((event) => {
 });
 ```
 
-Event types include `set`, `fetch`, `success`, `error`, `invalidate`, `remove`, and `clear`.
+Event types include `set`, `fetch`, `success`, `error`, `cache-error`, `invalidate`, `remove`, and `clear`.
+
+```js
+const unsubscribe = queryClient.subscribe((event) => {
+  if (event.type === 'cache-error') {
+    console.error(event.error);
+  }
+});
+```
+
+Persistent cache write failures do not change the successful query result, but they are exposed through `cache-error`.
 
 ## Retry
 
@@ -408,4 +439,4 @@ For regular business pages, directly reading `query.state` is more recommended.
 - Needs for caching, prefetching, deduplication, invalidation, or optimistic updates.
 - Unified handling of loading, refreshing, error, and retry states.
 
-`vanilla-query` does not handle DOM rendering. The UI layer only consumes `query()` and `query.state`; the rendering approach is determined by the application itself.
+`vanilla-signal-query` does not handle DOM rendering. The UI layer only consumes `query()` and `query.state`; the rendering approach is determined by the application itself.
