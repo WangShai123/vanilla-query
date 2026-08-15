@@ -2,7 +2,7 @@
 
 ## Design Principles
 
-`vanilla-signal-query` focuses on browser-side server state management. It handles query state, caching, invalidation, and request lifecycle, without binding to DOM rendering or prescribing UI organization patterns.
+`vanilla-signal-query` focuses on server state management. It handles query state, caching, invalidation, and request lifecycle, without binding to DOM rendering or prescribing UI organization patterns.
 
 Core principles:
 

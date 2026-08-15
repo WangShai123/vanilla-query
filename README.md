@@ -1,5 +1,7 @@
 # Vanilla Query
 
+[中文](README_zh.md)
+
 `vanilla-query` is a small server-state and async query runtime for vanilla JavaScript. It provides reactive query state, pluggable data cache adapters, stale refresh, request dedupe, retry, timeout, abort, prefetch and cache invalidation.
 
 It is designed to work with [`vanilla-signal`](https://github.com/WangShai123/vanilla-signal):

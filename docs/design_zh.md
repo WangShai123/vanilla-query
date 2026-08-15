@@ -2,7 +2,7 @@
 
 ## 设计原则
 
-`vanilla-signal-query` 专注于浏览器端 server state 管理。它处理 query 状态、缓存、失效和请求生命周期，不绑定 DOM 渲染，也不规定 UI 组织方式。
+`vanilla-signal-query` 专注于 server state 管理。它处理 query 状态、缓存、失效和请求生命周期，不绑定 DOM 渲染，也不规定 UI 组织方式。
 
 核心原则：
 

@@ -45,13 +45,13 @@
   },
   "dependencies": {
     "vanilla-create-storage": "^1.0.4",
-    "vanilla-signal": "^1.1.14",
-    "vanilla-simple-lru": "^1.0.2"
+    "vanilla-signal": "^1.1.15",
+    "vanilla-simple-lru": "^1.0.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.5",
     "typescript": "^7.0.2",
-    "vite-plus": "^0.2.7"
+    "vite-plus": "^0.2.9"
   },
   "devEngines": {
     "packageManager": {
